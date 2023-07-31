@@ -1,0 +1,7 @@
+{
+  "path": "./test.json",
+  "workers": 100,
+  "dedup": "y",
+  "outpath": "",
+  "error_output": true
+}
