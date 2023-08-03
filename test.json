@@ -1,32 +1,45 @@
 [
     {
+        "bookSourceGroup": "🚬刘备,网站失效",
+        "bookSourceName": "🚬 新暖才文学网~xncwxw.com",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.xncwxw.com/",
+        "ruleSearch": {
+          "author": "class.odd.1@text||class.s5@text",
+          "bookList": "class.grid@tag.tr!0||id.newscontent@class.l@tag.li",
+          "bookUrl": "class.odd.0@tag.a@href||class.s2@tag.a@href",
+          "coverUrl": "class.odd.0@tag.a@href||class.s2@tag.a@href##/html/(\\d+)/(\\d+)/index.html##/image/$1/$2/$2s.jpg",
+          "lastChapter": "class.even.0@text||class.s3@text##章节目录|.*】",
+          "name": "class.odd.0@tag.a@text||class.s2@tag.a@text"
+        },
+        "searchUrl": "/modules/article/search.php?searchtype=articlename&searchkey={{key}}&page={{page}},{\n  \"charset\": \"gbk\"\n}",
+        "weight": 0
+      },
+    {
+        "bookSourceGroup": "🚬刘备,发现失效,搜索失效",
+        "bookSourceName": "🚬 看客网",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.kankeo.cc/",
+        "ruleSearch": {
+          "author": ".c_tag span.1@text",
+          "bookList": ".c_row",
+          "bookUrl": "a.1@href",
+          "coverUrl": "img@src",
+          "intro": ".c_description@text",
+          "kind": ".c_tag span.3:7:-1@text",
+          "lastChapter": "a.3@text",
+          "name": "a.1@text",
+          "wordCount": ".c_tag span.5@text"
+        },
+        "searchUrl": "/modules/article/search.php?searchkey={{key}}&searchtype=all&page={{page}}",
+        "weight": 0
+      },
+    {
         "bookSourceGroup":"👻 隐藏",
         "bookSourceName":"📖 爱看小说",
         "bookSourceType":0,
         "bookSourceUrl":"https://m.ai9w.com/",
-        "customOrder":20011733,
-        "enabled":true,
-        "enabledCookieJar":true,
-        "enabledExplore":true,
         "header":"{\n    \"User-Agent\": \"Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1\"\n}",
-        "lastUpdateTime":1681261338655,
-        "respondTime":45634,
-        "ruleBookInfo":{
-            "coverUrl":"//meta[@property=\"og:image\"]/@content",
-            "intro":"//meta[@property=\"og:description\"]/@content",
-            "kind":"//meta[@property=\"og:novel:category\"]/@content",
-            "lastChapter":"//meta[@property=\"og:novel:latest_chapter_name\"]/@content",
-            "name":"",
-            "tocUrl":""
-        },
-        "ruleContent":{
-            "content":"#novelcontent@html",
-            "nextContentUrl":"text.下一页@href"
-        },
-        "ruleExplore":{
-        },
-        "ruleReview":{
-        },
         "ruleSearch":{
             "author":".p3@a@text",
             "bookList":".content_link",
@@ -34,12 +47,6 @@
             "checkKeyWord":"",
             "kind":".p1@a@text##[\\[\\]]",
             "name":".p2@a@text"
-        },
-        "ruleToc":{
-            "chapterList":".info_chapters@tag.ul.1@li@a",
-            "chapterName":"text",
-            "chapterUrl":"href",
-            "nextTocUrl":"text.下一页@href"
         },
         "searchUrl":"s.php,{\n  \"method\": \"POST\",\n  \"charset\": \"gbk\",\n  \"body\": \"s={{key}}&type=articlename\"\n}\n",
         "weight":0
