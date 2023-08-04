@@ -1,149 +1,144 @@
 import cheerio from 'cheerio';
+import xpath, { SelectedValue } from 'xpath';
+import { DOMParser } from 'xmldom';
 import RuleAnalyzer from './RuleAnalyzer';
 
 class AnalyzeByXPath {
-  private jxNode: cheerio.Cheerio;
+    private dom: any;
 
-  constructor(doc: any) {
-    this.jxNode = this.parse(doc);
-  }
-
-  private parse(doc: any): cheerio.Cheerio {
-    if (doc instanceof cheerio.Cheerio) {
-      return doc;
-    } else if (doc instanceof cheerio.Element) {
-      return cheerio([doc]);
-    } else if (Array.isArray(doc)) {
-      return cheerio(doc);
-    } else if (typeof doc === 'string') {
-      let html = doc;
-      if (html.endsWith('</td>')) {
-        html = `<tr>${html}</tr>`;
-      }
-      if (html.endsWith('</tr>') || html.endsWith('</tbody>')) {
-        html = `<table>${html}</table>`;
-      }
-      if (html.trim().toLowerCase().startsWith('<?xml')) {
-        return cheerio.load(html, { xmlMode: true });
-      }
-      return cheerio.load(html);
-    } else {
-      throw new Error('Invalid document type');
-    }
-  }
-
-  private getResult(xPath: string): cheerio.Cheerio {
-    const node = this.jxNode;
-    if (node instanceof cheerio.Cheerio) {
-      return node.find(xPath);
-    } else {
-      throw new Error('Invalid node type');
-    }
-  }
-
-  public getElements(xPath: string): cheerio.Cheerio {
-    if (xPath.length === 0) return cheerio();
-
-    const jxNodes: cheerio.Cheerio[] = [];
-    const ruleAnalyzes = new RuleAnalyzer(xPath);
-    const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
-
-    if (rules.length === 1) {
-      return this.getResult(rules[0]);
-    } else {
-      const results: cheerio.Cheerio[] = [];
-      for (const rl of rules) {
-        const temp = this.getElements(rl);
-        if (temp.length > 0) {
-          results.push(temp);
-          if (temp.length > 0 && ruleAnalyzes.elementsType === '||') {
-            break;
-          }
-        }
-      }
-      if (results.length > 0) {
-        if (ruleAnalyzes.elementsType === '%%') {
-          for (let i = 0; i < results[0].length; i++) {
-            for (const temp of results) {
-              if (i < temp.length) {
-                jxNodes.push(temp.eq(i));
-              }
-            }
-          }
+    constructor(doc: any) {
+        if (typeof doc === 'string') {
+            this.dom = this.strToDom(doc);
         } else {
-          for (const temp of results) {
-            jxNodes.push(...temp.toArray());
-          }
+            this.dom = doc;
         }
-      }
     }
-    return cheerio(jxNodes);
-  }
 
-  public getStringList(xPath: string): string[] {
-    const result: string[] = [];
-    const ruleAnalyzes = new RuleAnalyzer(xPath);
-    const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
-
-    if (rules.length === 1) {
-      const elements = this.getResult(xPath);
-      elements.each((_, element) => {
-        result.push(cheerio(element).text());
-      });
-      return result;
-    } else {
-      const results: string[][] = [];
-      for (const rl of rules) {
-        const temp = this.getStringList(rl);
-        if (temp.length > 0) {
-          results.push(temp);
-          if (temp.length > 0 && ruleAnalyzes.elementsType === '||') {
-            break;
-          }
+    private strToDom(html: string): any {
+        let html1 = html;
+        if (html1.endsWith("</td>")) {
+            html1 = "<tr>${html1}</tr>";
         }
-      }
-      if (results.length > 0) {
-        if (ruleAnalyzes.elementsType === '%%') {
-          for (let i = 0; i < results[0].length; i++) {
-            for (const temp of results) {
-              if (i < temp.length) {
-                result.push(temp[i]);
-              }
-            }
-          }
+        if (html1.endsWith("</tr>") || html1.endsWith("</tbody>")) {
+            html1 = "<table>${html1}</table>";
+        }
+        if (html1.trim().startsWith("<?xml")) {
+            const doc = new DOMParser().parseFromString(html1);
+            return doc;
+        }
+        return cheerio.load(html1);
+    }
+
+    private getResult(xPath: string): any[] {
+        const nodesXPath = xpath.select(xPath, this.dom) as SelectedValue;
+        if (Array.isArray(nodesXPath)) {
+            return nodesXPath;
+        }
+        return [];
+    }
+
+    getElements(xPath: string): any[] {
+        if (!xPath) return [];
+
+        const analyzedNodes: any[] = [];
+        const ruleAnalyzes = new RuleAnalyzer(xPath);
+        const rules = ruleAnalyzes.splitRule("&&", "||", "%%");
+
+        if (rules.length === 1) {
+            return this.getResult(rules[0]);
         } else {
-          for (const temp of results) {
-            result.push(...temp);
-          }
+            const results: any[][] = [];
+            for (const rl of rules) {
+                const temp = this.getElements(rl);
+                if (temp && temp.length > 0) {
+                    results.push(temp);
+                    if (temp.length > 0 && ruleAnalyzes.elementsType === "||") {
+                        break;
+                    }
+                }
+            }
+            if (results.length > 0) {
+                if ("%%" === ruleAnalyzes.elementsType) {
+                    for (let i = 0; i < results[0].length; i++) {
+                        for (const temp of results) {
+                            if (i < temp.length) {
+                                analyzedNodes.push(temp[i]);
+                            }
+                        }
+                    }
+                } else {
+                    for (const temp of results) {
+                        analyzedNodes.push(...temp);
+                    }
+                }
+            }
         }
-      }
+        return analyzedNodes;
     }
-    return result;
-  }
 
-  public getString(rule: string): string | null {
-    const ruleAnalyzes = new RuleAnalyzer(rule);
-    const rules = ruleAnalyzes.splitRule('&&', '||');
-    if (rules.length === 1) {
-      const elements = this.getResult(rule);
-      if (elements.length > 0) {
-        return elements.toArray().map((element) => cheerio(element).text()).join('\n');
-      }
-      return null;
-    } else {
-      const textList: string[] = [];
-      for (const rl of rules) {
-        const temp = this.getString(rl);
-        if (temp) {
-          textList.push(temp);
-          if (ruleAnalyzes.elementsType === '||') {
-            break;
-          }
+    getStringList(xPath: string): string[] {
+        const result: string[] = [];
+        const ruleAnalyzes = new RuleAnalyzer(xPath);
+        const rules = ruleAnalyzes.splitRule("&&", "||", "%%");
+
+        if (rules.length === 1) {
+            const res = this.getResult(xPath);
+            for (const node of res) {
+                result.push(node.toString());
+            }
+            return result;
+        } else {
+            const results: string[][] = [];
+            for (const rl of rules) {
+                const temp = this.getStringList(rl);
+                if (temp.length > 0) {
+                    results.push(temp);
+                    if (temp.length > 0 && ruleAnalyzes.elementsType === "||") {
+                        break;
+                    }
+                }
+            }
+            if (results.length > 0) {
+                if ("%%" === ruleAnalyzes.elementsType) {
+                    for (let i = 0; i < results[0].length; i++) {
+                        for (const temp of results) {
+                            if (i < temp.length) {
+                                result.push(temp[i]);
+                            }
+                        }
+                    }
+                } else {
+                    for (const temp of results) {
+                        result.push(...temp);
+                    }
+                }
+            }
         }
-      }
-      return textList.join('\n');
+        return result;
     }
-  }
+
+    getString(rule: string): string | null {
+        const ruleAnalyzes = new RuleAnalyzer(rule);
+        const rules = ruleAnalyzes.splitRule("&&", "||");
+        if (rules.length === 1) {
+            const res = this.getResult(rule);
+            if (res && res.length > 0) {
+                return res.map(node => node.toString()).join("\n");
+            }
+            return null;
+        } else {
+            const textList: string[] = [];
+            for (const rl of rules) {
+                const temp = this.getString(rl);
+                if (temp) {
+                    textList.push(temp);
+                    if (ruleAnalyzes.elementsType === "||") {
+                        break;
+                    }
+                }
+            }
+            return textList.join("\n");
+        }
+    }
 }
-
 export default AnalyzeByXPath;

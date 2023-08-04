@@ -1,14 +1,9 @@
-import cheerio from 'cheerio';
-import fetch from 'node-fetch';
 import vm from 'vm';
 import RuleAnalyzer from './RuleAnalyzer';
+import { RuleDataInterface } from './RuleDataInterface';
 
 interface BaseSource {
   // Define the BaseSource interface here
-}
-
-interface RuleDataInterface {
-  // Define the RuleDataInterface interface here
 }
 
 interface Book {

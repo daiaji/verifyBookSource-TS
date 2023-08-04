@@ -5,8 +5,7 @@ export interface RuleDataInterface {
 
   putBigVariable(key: string, value: string | null): void;
 
-  getVariable(key: string): string;
+  getVariable(): string;
 
   getBigVariable(key: string): string | null;
 }
- 
