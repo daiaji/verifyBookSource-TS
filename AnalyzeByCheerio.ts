@@ -1,5 +1,5 @@
 import cheerio from 'cheerio';
-import RuleAnalyzer from './RuleAnalyzer.ts';
+import RuleAnalyzer from './RuleAnalyzer';
 
 class AnalyzeByCheerio {
   private element: cheerio.Cheerio;

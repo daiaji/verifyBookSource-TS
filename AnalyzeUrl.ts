@@ -1,7 +1,7 @@
 import cheerio from 'cheerio';
 import fetch from 'node-fetch';
 import vm from 'vm';
-import RuleAnalyzer from './RuleAnalyzer.ts';
+import RuleAnalyzer from './RuleAnalyzer';
 
 interface BaseSource {
   // Define the BaseSource interface here

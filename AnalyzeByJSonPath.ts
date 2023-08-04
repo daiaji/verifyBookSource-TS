@@ -1,5 +1,5 @@
 import * as jsonpath from 'jsonpath';
-import RuleAnalyzer from './RuleAnalyzer.ts';
+import RuleAnalyzer from './RuleAnalyzer';
 
 class AnalyzeByJsonPath {
   private ctx: jsonpath.JSONPath;
