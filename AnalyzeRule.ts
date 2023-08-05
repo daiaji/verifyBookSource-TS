@@ -5,6 +5,7 @@ import AnalyzeByJSoup from './AnalyzeByJSoup';
 import AnalyzeByRegex from './AnalyzeByRegex';
 import AnalyzeByXPath from './AnalyzeByXPath';
 import AnalyzeUrl from './AnalyzeUrl';
+import NetworkUtils from './NetworkUtils';
 import RuleDataInterface from './RuleDataInterface';
 
 class AnalyzeRule {
@@ -460,10 +461,6 @@ class BaseBook {
 
 class BookChapter {
   // 根据具体情况实现 BookChapter 类
-}
-
-class NetworkUtils {
-  // 根据具体情况实现 NetworkUtils 类
 }
 
 class SourceRule {
