@@ -55,3 +55,4 @@ export class AnalyzeByRegex {
     }
   }
 }
+export default AnalyzeByRegex;

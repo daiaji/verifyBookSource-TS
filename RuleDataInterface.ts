@@ -9,3 +9,4 @@ export interface RuleDataInterface {
 
   getBigVariable(key: string): string | null;
 }
+export default RuleDataInterface;
