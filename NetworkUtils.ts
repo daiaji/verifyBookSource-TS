@@ -1,128 +1,121 @@
+import URLParse from 'url-parse';
+import querystring from 'querystring';
+import psl, { ParsedDomain } from 'psl';
+import { Address4, Address6 } from 'ip-address';
+
 class NetworkUtils {
-    private static readonly notNeedEncoding: Set<number> = new Set([
-      ...Array.from({ length: 10 }, (_, i) => i + '0'.charCodeAt(0)), // 0-9
-      ...Array.from({ length: 26 }, (_, i) => i + 'a'.charCodeAt(0)), // a-z
-      ...Array.from({ length: 26 }, (_, i) => i + 'A'.charCodeAt(0)), // A-Z
-      '+'.charCodeAt(0),
-      '-'.charCodeAt(0),
-      '_'.charCodeAt(0),
-      '.'.charCodeAt(0),
-      '$'.charCodeAt(0),
-      ':'.charCodeAt(0),
-      '('.charCodeAt(0),
-      ')'.charCodeAt(0),
-      '*'.charCodeAt(0),
-      '@'.charCodeAt(0),
-      '&'.charCodeAt(0),
-      '#'.charCodeAt(0),
-      ','.charCodeAt(0),
-      '['.charCodeAt(0),
-      ']'.charCodeAt(0),
-    ]);
+  /**
+   * 检查字符串是否已被URL编码
+   * @param str 要检查的字符串
+   * @returns 如果字符串已被URL编码，则返回true
+   */
+  public static hasUrlEncoded(str: string): boolean {
+    return str === querystring.escape(str);
+  }
 
-    public static hasUrlEncoded(str: string): boolean {
-      for (let i = 0; i < str.length; i++) {
-        const c = str[i];
-        if (this.notNeedEncoding.has(c.charCodeAt(0))) {
-          continue;
-        }
-        if (c === '%' && i + 2 < str.length) {
-          const c1 = str[++i];
-          const c2 = str[++i];
-          if (/^[0-9A-Fa-f]+$/.test(c1 + c2)) {
-            continue;
-          }
-        }
-        return false;
-      }
-      return true;
-    }
-
-    public static getAbsoluteURL(baseURL: URL | null, relativePath: string): string {
-      const relativePathTrim = relativePath.trim();
-      if (!baseURL) {
-        return relativePathTrim;
-      }
-      if (this.isAbsUrl(relativePathTrim)) {
-        return relativePathTrim;
-      }
-      if (this.isDataUrl(relativePathTrim)) {
-        return relativePathTrim;
-      }
-      if (relativePathTrim.startsWith('javascript')) {
-        return '';
-      }
-      let relativeUrl = relativePathTrim;
-      try {
-        const parseUrl = new URL(relativePath, baseURL);
-        relativeUrl = parseUrl.toString();
-        return relativeUrl;
-      } catch (e) {
-        console.error(`网址拼接出错\n${(e as Error).message}`);
-      }
-      return relativeUrl;
-    }
-
-    public static getBaseUrl(url: string | null): string | null {
-      if (!url) {
-        return null;
-      }
-      if (url.toLowerCase().startsWith('http://') || url.toLowerCase().startsWith('https://')) {
-        const index = url.indexOf('/', 9);
-        if (index === -1) {
-          return url;
-        } else {
-          return url.substring(0, index);
-        }
-      }
-      return null;
-    }
-
-    public static getSubDomain(url: string): string {
-      const baseUrl = this.getBaseUrl(url);
-      if (!baseUrl) {
-        return url;
+  /**
+   * 获取绝对URL
+   * @param baseURL 基础URL
+   * @param relativePath 相对路径
+   * @returns 绝对URL
+   * @throws 当URL拼接出错时抛出错误
+   */
+  public static getAbsoluteURL(baseURL: string | null, relativePath: string): string;
+  public static getAbsoluteURL(baseURL: URL | null, relativePath: string): string;
+  public static getAbsoluteURL(baseURL: string | URL | null, relativePath: string): string {
+    let absoluteUrl: URL | null = null;
+    if (typeof baseURL === 'string') {
+      if (baseURL.trim() === '') {
+        return relativePath.trim();
       }
       try {
-        const mURL = new URL(baseUrl);
-        const host = mURL.host;
-        if (this.isIPAddress(host)) {
-          return host;
-        }
-        return host.split('.').slice(-2).join('.');
+        absoluteUrl = new URL(baseURL);
       } catch (e) {
-        console.error(`获取域名出错\n${(e as Error).message}`);
+        throw new Error(`URL解析出错\n${(e as Error).message}`);
       }
-      return baseUrl;
+    } else if (baseURL instanceof URL) {
+      absoluteUrl = baseURL;
+    } else {
+      return relativePath.trim();
     }
 
-    private static isIPv4Address(input: string | null): boolean {
-      if (!input) {
-        return false;
-      }
-      const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-      return ipv4Regex.test(input);
+    const relativePathTrim = relativePath.trim();
+    if (this.isAbsUrl(relativePathTrim) || this.isDataUrl(relativePathTrim)) {
+      return relativePathTrim;
     }
-
-    private static isIPv6Address(input: string | null): boolean {
-      if (!input) {
-        return false;
-      }
-      const ipv6Regex = /^([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}$/;
-      return ipv6Regex.test(input);
+    if (relativePathTrim.startsWith('javascript') || relativePathTrim.startsWith('mailto:') || relativePathTrim.startsWith('tel:')) {
+      return '';
     }
-
-    public static isIPAddress(input: string | null): boolean {
-      return this.isIPv4Address(input) || this.isIPv6Address(input);
-    }
-
-    private static isAbsUrl(url: string): boolean {
-      return /^https?:\/\//i.test(url);
-    }
-
-    private static isDataUrl(url: string): boolean {
-      return /^data:/i.test(url);
+    try {
+      const parseUrl = new URL(relativePath, absoluteUrl.toString());
+      return parseUrl.toString();
+    } catch (e) {
+      throw new Error(`网址拼接出错\n${(e as Error).message}`);
     }
   }
+
+  /**
+   * 获取基础URL
+   * @param url URL
+   * @returns 基础URL
+   * @throws 当获取基础URL出错时抛出错误
+   */
+  public static getBaseUrl(url: string | null): string | null {
+    if (!url || !url.trim()) {
+      return null;
+    }
+    try {
+      const parsedUrl = new URLParse(url);
+      return parsedUrl.origin;
+    } catch (e) {
+      throw new Error(`获取基础URL出错\n${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * 获取域名
+   * @param url URL
+   * @returns 域名
+   * @throws 当获取域名出错时抛出错误
+   */
+  public static getDomain(url: string): string | null {
+    const baseUrl = this.getBaseUrl(url);
+    if (!baseUrl) {
+      return url;
+    }
+    try {
+      const mURL = new URLParse(baseUrl);
+      const host = mURL.host;
+      if (this.isIPAddress(host)) {
+        return host;
+      }
+      const parsed = psl.parse(host);
+      if ('domain' in parsed) {
+        return (parsed as ParsedDomain).domain;
+      } else {
+        throw new Error(`解析域名出错：${parsed}`);
+      }
+    } catch (e) {
+      throw new Error(`获取域名出错\n${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * 检查输入是否为IP地址
+   * @param input 输入
+   * @returns 如果输入是IP地址，则返回true
+   */
+  public static isIPAddress(input: string | null): boolean {
+    return input != null && (Address4.isValid(input) || Address6.isValid(input));
+  }
+
+  private static isAbsUrl(url: string): boolean {
+    return /^https?:\/\//i.test(url);
+  }
+
+  private static isDataUrl(url: string): boolean {
+    return /^data:/i.test(url);
+  }
+}
 
 export default NetworkUtils;

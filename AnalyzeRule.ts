@@ -1,18 +1,19 @@
-import { escapeHtml } from 'lodash';
+import _ from 'lodash';
 
-import AnalyzeByJSonPath from './AnalyzeByRegex';
+import AnalyzeByJSonPath from './AnalyzeByJSonPath';
 import AnalyzeByJSoup from './AnalyzeByJSoup';
 import AnalyzeByRegex from './AnalyzeByRegex';
 import AnalyzeByXPath from './AnalyzeByXPath';
 import AnalyzeUrl from './AnalyzeUrl';
 import NetworkUtils from './NetworkUtils';
 import RuleDataInterface from './RuleDataInterface';
+import { isJson } from './StringExtensions';
 
 class AnalyzeRule {
-  private ruleData: RuleDataInterface | undefined;
   private source: BaseSource | undefined;
   private book: BaseBook | undefined;
   private chapter: BookChapter | null = null;
+  private ruleData: RuleDataInterface | undefined;
   private nextChapterUrl: string | null = null;
   private content: any = null;
   private baseUrl: string | null = null;
@@ -38,7 +39,7 @@ class AnalyzeRule {
       throw new Error('内容不可空（Content cannot be null）');
     }
     this.content = content;
-    this.isJSON = JSON.stringify(content).isJson();
+    this.isJSON = isJson(JSON.stringify(content));
     this.setBaseUrl(baseUrl);
     this.objectChangedXP = true;
     this.objectChangedJS = true;
@@ -56,8 +57,12 @@ class AnalyzeRule {
   public setRedirectUrl(url: string): URL | null {
     try {
       this.redirectUrl = new URL(url);
-    } catch (e) {
-      console.log(`URL(${url}) error\n${e.message}`);
+    } catch (e: Error | unknown) {
+      if (e instanceof Error) {
+        console.log(`URL(${url}) error\n${e.message}`);
+      } else {
+        console.log(`URL(${url}) error\n${e}`);
+      }
     }
     return this.redirectUrl;
   }
@@ -98,15 +103,13 @@ class AnalyzeRule {
     }
   }
 
-  public getStringList(rule: string | undefined, mContent: any = null, isUrl: boolean = false): string[] | null {
-    if (rule == null || rule === '') {
+  public getStringList(rule: string | undefined, mContent?: any, isUrl?: boolean): string[] | null;
+  public getStringList(ruleList: SourceRule[], mContent?: any, isUrl?: boolean): string[] | null;
+  public getStringList(ruleOrRuleList: string | SourceRule[] | undefined, mContent: any = null, isUrl: boolean = false): string[] | null {
+    if (ruleOrRuleList == null || ruleOrRuleList === '') {
       return null;
     }
-    const ruleList = this.splitSourceRuleCacheString(rule);
-    return this.getStringList(ruleList, mContent, isUrl);
-  }
-
-  public getStringList(ruleList: SourceRule[], mContent: any = null, isUrl: boolean = false): string[] | null {
+    const ruleList = Array.isArray(ruleOrRuleList) ? ruleOrRuleList : this.splitSourceRuleCacheString(ruleOrRuleList);
     let result: any = null;
     const content = mContent ?? this.content;
     if (content != null && ruleList.length > 0) {
@@ -174,15 +177,13 @@ class AnalyzeRule {
     return result as string[];
   }
 
-  public getString(ruleStr: string | undefined, mContent: any = null, isUrl: boolean = false): string {
-    if (ruleStr == null || ruleStr === '') {
+  public getString(ruleStr: string | undefined, mContent?: any, isUrl?: boolean): string;
+  public getString(ruleList: SourceRule[], mContent?: any, isUrl?: boolean, unescape?: boolean): string;
+  public getString(ruleOrRuleList: string | SourceRule[] | undefined, mContent: any = null, isUrl: boolean = false, unescape: boolean = true): string {
+    if (ruleOrRuleList == null || ruleOrRuleList === '') {
       return '';
     }
-    const ruleList = this.splitSourceRuleCacheString(ruleStr);
-    return this.getString(ruleList, mContent, isUrl);
-  }
-
-  public getString(ruleList: SourceRule[], mContent: any = null, isUrl: boolean = false, unescape: boolean = true): string {
+    const ruleList = Array.isArray(ruleOrRuleList) ? ruleOrRuleList : this.splitSourceRuleCacheString(ruleOrRuleList);
     let result: any = null;
     const content = mContent ?? this.content;
     if (content != null && ruleList.length > 0) {
@@ -228,7 +229,7 @@ class AnalyzeRule {
     if (result == null) {
       result = '';
     }
-    const str = unescape ? escapeHtml(result.toString()) : result.toString();
+    const str = unescape ? _.escape(result.toString()) : result.toString();
     if (isUrl) {
       return str === '' ? (this.baseUrl ?? '') : NetworkUtils.getAbsoluteURL(this.redirectUrl, str);
     }
@@ -449,18 +450,6 @@ enum Mode {
   Default,
   Js,
   Regex,
-}
-
-class BaseSource {
-  // 根据具体情况实现 BaseSource 类
-}
-
-class BaseBook {
-  // 根据具体情况实现 BaseBook 类
-}
-
-class BookChapter {
-  // 根据具体情况实现 BookChapter 类
 }
 
 class SourceRule {
