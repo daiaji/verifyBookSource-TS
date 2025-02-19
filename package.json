@@ -1,0 +1,51 @@
+{
+  "name": "book-source-kit",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.4.0",
+  "description": "A toolkit for parsing and managing book sources, compatible with Legado.",
+  "author": "aooiuu <aooiu@qq.com>",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/aooiuu/book-source-kit#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aooiuu/book-source-kit"
+  },
+  "bugs": {
+    "url": "https://github.com/aooiuu/book-source-kit/issues"
+  },
+  "keywords": [
+    "book-source",
+    "reader",
+    "legado",
+    "parser",
+    "toolkit",
+    "scraper",
+    "web-scraping"
+  ],
+  "scripts": {
+    "start": "tsx start.ts",
+    "build:legado": "pnpm --filter=@book-source-kit/legado build",
+    "build:rule-utils": "pnpm --filter=@book-source-kit/rule-utils build",
+    "build:utils": "pnpm --filter=@book-source-kit/utils build",
+    "build": "npm-run-all2 build:legado build:rule-utils build:utils",
+    "clean": "rimraf packages/*/dist --glob",
+    "lint": "eslint . --ext .ts --fix --cache",
+    "release": "bumpp -r --no-push"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "bumpp": "^10.0.3",
+    "eslint": "^9.20.1",
+    "lint-staged": "^15.4.3",
+    "npm-run-all2": "^7.0.2",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

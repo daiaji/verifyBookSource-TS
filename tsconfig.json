@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "target": "ES2019",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "lib": [
+      "esnext"
+    ],
+    "paths": {
+      "@any-reader/utils": [
+        "./packages/utils/src/index.ts"
+      ],
+      "@any-reader/rule-utils": [
+        "./packages/rule-utils/src/index.ts"
+      ],
+      "@any-reader/legado": [
+        "./packages/legado/src/index.ts"
+      ] // 如果你直接 import 了 @any-reader/legado
+    }
+  },
+  "exclude": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/public/**"
+  ],
+  "ts-node": {
+    "esm": true,
+    "transpileOnly": true,
+    "experimentalSpecifierResolution": "node",
+    "require": [
+      "tsconfig-paths/register"
+    ]
+  }
+}

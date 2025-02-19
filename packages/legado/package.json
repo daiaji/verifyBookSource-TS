@@ -1,0 +1,62 @@
+{
+  "name": "@any-reader/legado",
+  "type": "module",
+  "version": "1.11.4",
+  "private": true,
+  "description": "",
+  "author": "aooiuu <aooiu@qq.com>",
+  "license": "GPL3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aooiuu/any-reader"
+  },
+  "keywords": [],
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./types": {
+      "require": "./dist/types.cjs",
+      "import": "./dist/types.mjs",
+      "types": "./dist/types.d.ts"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "tsx src/start.ts",
+    "build": "unbuild",
+    "stub": "unbuild --stub"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.3",
+    "axios": "^1.7.7",
+    "chardet": "^2.0.0",
+    "cheerio": "1.0.0",
+    "content-type": "^1.0.5",
+    "domhandler": "^5.0.3",
+    "flatted": "^3.3.2",
+    "iconv-lite": "^0.6.3",
+    "isolated-vm": "^5.0.3",
+    "jsonpath-plus": "^9.0.0",
+    "puppeteer": "^23.5.3",
+    "unbuild": "^3.3.1",
+    "urlencode": "^2.0.0",
+    "vscode": "^1.1.37",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "xpath": "^0.0.34"
+  },
+  "devDependencies": {
+    "@any-reader/rule-utils": "workspace:^",
+    "@types/content-type": "^1.1.8",
+    "@types/xmldom": "^0.1.34",
+    "eslint": "^8.57.1",
+    "typescript": "^5.5.4"
+  }
+}
