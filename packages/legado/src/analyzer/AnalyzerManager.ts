@@ -54,7 +54,7 @@ export class AnalyzerManager {
     if (isUrl && Array.isArray(result)) {
       const urlList: string[] = [];
       for (const url of result) {
-        const absoluteURL = NetworkUtils.getAbsoluteURL2(this.redirectUrl, String(url));
+        const absoluteURL = NetworkUtils.getAbsoluteURL(this.redirectUrl, String(url));
         if (absoluteURL && !urlList.includes(absoluteURL)) {
           urlList.push(absoluteURL);
         }
@@ -94,7 +94,7 @@ export class AnalyzerManager {
     }
 
     if (isUrl) {
-      const absoluteUrl = result.trim() === '' ? this.baseUrl : NetworkUtils.getAbsoluteURL2(this.redirectUrl, result);
+      const absoluteUrl = result.trim() === '' ? this.baseUrl : NetworkUtils.getAbsoluteURL(this.redirectUrl, result);
       logger.silly(`返回结果, 字段: ${fieldName}, 结果: ${absoluteUrl}, (URL 已处理)`);
       return absoluteUrl;
     }

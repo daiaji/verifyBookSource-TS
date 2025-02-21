@@ -1,127 +1,86 @@
 import logger from './logger';
 
 export class NetworkUtils {
-  private static notNeedEncoding: Set<number> = new Set();
+    // 使用 Set 提高查找效率
+    private static readonly NOT_NEED_ENCODING: Set<number> = new Set(
+        [...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-_.~$:()!*@&#,[]'].map(c => c.charCodeAt(0))
+    );
+    private static readonly DATA_URI_REGEX: RegExp = /^data:.*?;base64,(.*)$/;
+    private static readonly ABS_URL_REGEX = /^(http|https):\/\/.+/;
 
-  /**
-   * 获取绝对地址
-   */
-  static getAbsoluteURL(baseURL: string | undefined, relativePath: string): string {
-    if (!baseURL || baseURL.trim() === '') {
-      return relativePath.trim();
-    }
+    /**
+     * 获取绝对地址 (合并 getAbsoluteURL 和 getAbsoluteURL2)
+     * @param baseURL 基础 URL, 可以是字符串或 URL 对象
+     * @param relativePath 相对路径
+     * @returns 绝对 URL
+     */
+    static getAbsoluteURL(baseURL: string | URL | null | undefined, relativePath: string): string {
+        const relativePathTrim = relativePath.trim();
 
-    let absoluteUrl: URL | null = null;
+        // 优先处理特殊情况
+        if (!baseURL || baseURL === '') return relativePathTrim;
+        if (NetworkUtils.isAbsUrl(relativePathTrim)) return relativePathTrim;
+        if (NetworkUtils.isDataUrl(relativePathTrim)) return relativePathTrim;
+        if (relativePathTrim.startsWith('javascript')) return '';
 
-    try {
-      const trimmedBaseURL = baseURL.split(',')[0].trim();
-      absoluteUrl = new URL(trimmedBaseURL);
-    } catch (e: any) {
-      logger.error("解析 baseURL 失败:", { baseURL, error: e, stack: e.stack }); // 中文 + 结构化
-    }
-
-    return this.getAbsoluteURL2(absoluteUrl, relativePath);
-  }
-
-  /**
-   * 获取绝对地址
-   */
-  static getAbsoluteURL2(baseURL: URL | null, relativePath: string): string {
-    const relativePathTrim = relativePath.trim();
-    if (baseURL === null) return relativePathTrim;
-    if (this.isAbsUrl(relativePathTrim)) return relativePathTrim;
-    if (this.isDataUrl(relativePathTrim)) return relativePathTrim;
-    if (relativePathTrim.startsWith('javascript')) return '';
-
-    let relativeUrl = relativePathTrim;
-
-    try {
-      const parseUrl = new URL(relativePathTrim, baseURL);
-      relativeUrl = parseUrl.toString();
-      return relativeUrl;
-    } catch (e: any) {
-      logger.error("网址拼接出错:", { baseURL, relativePath, error: e, stack: e.stack }); // 中文 + 结构化
-    }
-
-    return relativeUrl;
-  }
-
-  static getBaseUrl(url: string | null): string | null {
-    if (!url) return null;
-
-    const lowerCaseUrl = url.toLowerCase();
-    if (lowerCaseUrl.startsWith('http://') || lowerCaseUrl.startsWith('https://')) {
-      const index = url.indexOf('/', 9);
-      return index === -1 ? url : url.substring(0, index);
-    }
-
-    return null;
-  }
-
-  private static initializeNotNeedEncoding(): void {
-    for (let i = 'a'.charCodeAt(0); i <= 'z'.charCodeAt(0); i++) {
-      this.notNeedEncoding.add(i);
-    }
-    for (let i = 'A'.charCodeAt(0); i <= 'Z'.charCodeAt(0); i++) {
-      this.notNeedEncoding.add(i);
-    }
-    for (let i = '0'.charCodeAt(0); i <= '9'.charCodeAt(0); i++) {
-      this.notNeedEncoding.add(i);
-    }
-    for (const char of '+-_.~$:()!*@&#,[]') {
-      this.notNeedEncoding.add(char.charCodeAt(0));
-    }
-  }
-
-  static isFullyUrlEncoded(str: string): boolean {
-    if (!this.notNeedEncoding.size) {
-      this.initializeNotNeedEncoding();
-    }
-
-    let needEncode = false;
-    let i = 0;
-
-    while (i < str.length) {
-      const c = str[i];
-
-      if (this.notNeedEncoding.has(c.charCodeAt(0))) {
-        i++;
-        continue;
-      }
-
-      // 检查是否为 URL 编码的格式
-      if (c === '%' && i + 2 < str.length) {
-        const c1 = str[++i];
-        const c2 = str[++i];
-
-        if (NetworkUtils.isDigit16Char(c1) && NetworkUtils.isDigit16Char(c2)) {
-          i++;
-          continue;
+        try {
+            // 统一使用 URL 对象处理
+            const base = typeof baseURL === 'string' ? new URL(baseURL.split(',')[0].trim()) : baseURL;
+            // 兼容传入 null 的情况
+            return new URL(relativePathTrim, base || undefined).toString();
+        } catch (e: any) {
+            logger.error("[NetworkUtils2] 网址拼接出错:", { baseURL, relativePath, error: e, stack: e.stack }); //添加 [NetworkUtils2]
+            return relativePathTrim; // 出错时返回原始的相对路径
         }
-      }
-
-      // 对于其他字符，标记为需要 URL 编码
-      needEncode = true;
-      break;
     }
 
-    return !needEncode;
-  }
+    static getBaseUrl(url: string | null): string | null {
+        if (!url) return null;
 
-  /**
-   * 判断 c 是否是 16 进制的字符
-   */
-  private static isDigit16Char(c: string): boolean {
-    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
-  }
+        const lowerCaseUrl = url.toLowerCase();
+        if (lowerCaseUrl.startsWith('http://') || lowerCaseUrl.startsWith('https://')) {
+            const index = url.indexOf('/', 9); // 从第9个字符开始找，兼容 "http://a/" 这种
+            return index === -1 ? url : url.substring(0, index);
+        }
 
-  private static isAbsUrl(url: string): boolean {
-    return /^(http|https):\/\/.+/.test(url);
-  }
+        return null;
+    }
 
-  private static isDataUrl(str: string | null): boolean {
-    return str !== null && this.dataUriRegex.test(str);
-  }
+    /**
+     * 检查字符串是否需要 URL 编码。
+     * @param str 要检查的字符串
+     * @returns 如果字符串不需要 URL 编码，则返回 true；否则返回 false。
+     */
+    static isFullyUrlEncoded(str: string): boolean {
+        for (let i = 0; i < str.length; i++) {
+            const charCode = str.charCodeAt(i);
 
-  private static dataUriRegex: RegExp = /^data:.*?;base64,(.*)$/;
+            if (!NetworkUtils.NOT_NEED_ENCODING.has(charCode)) {
+                // 检查是否为 URL 编码的格式
+                if (str[i] === '%' && i + 2 < str.length &&
+                    NetworkUtils.isDigit16Char(str[i + 1]) &&
+                    NetworkUtils.isDigit16Char(str[i + 2])) {
+                    i += 2; // 跳过已编码的部分
+                } else {
+                    return false; // 发现需要编码的字符
+                }
+            }
+        }
+        return true; // 所有字符都不需要编码
+    }
+
+    /**
+     * 判断 c 是否是 16 进制的字符
+     */
+    private static isDigit16Char(c: string): boolean {
+        return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+    }
+
+    private static isAbsUrl(url: string): boolean {
+        return NetworkUtils.ABS_URL_REGEX.test(url);
+    }
+
+    private static isDataUrl(str: string | null): boolean {
+        return str !== null && NetworkUtils.DATA_URI_REGEX.test(str);
+    }
 }

@@ -9,14 +9,26 @@ export interface NetworkResponse<T> {
 }
 
 export class NetworkManager {
-    private http = axios.create(); // 可以配置 axios 实例
+    private http = axios.create(); // 可以配置 axios 实例, 比如 timeout
 
     constructor(private baseURL?: string) { }
-
+    /**
+     * 发送 GET 请求。
+     * @param url 请求的 URL。
+     * @param config  可选的 Axios 请求配置。
+     * @returns  包含响应数据的 Promise。
+     */
     async get<T>(url: string, config?: AxiosRequestConfig): Promise<NetworkResponse<T>> {
         return this.request<T>({ ...config, method: 'GET', url });
     }
 
+    /**
+     * 发送 POST 请求。
+     * @param url 请求的 URL。
+     * @param data  可选的请求体数据。
+     * @param config 可选的 Axios 请求配置。
+     * @returns 包含响应数据的 Promise。
+     */
     async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<NetworkResponse<T>> {
         return this.request<T>({ ...config, method: 'POST', url, data });
     }
@@ -33,15 +45,15 @@ export class NetworkManager {
             // **遍历转换 headers**
             const headers: Record<string, string> = {};
             for (const key in response.headers) {
-                if (Object.prototype.hasOwnProperty.call(response.headers, key)) { // 更安全的检查
+                if (Object.prototype.hasOwnProperty.call(response.headers, key)) {
                     const value = response.headers[key];
                     if (typeof value === 'string') {
                         headers[key] = value;
                     } else if (Array.isArray(value)) {
-                        headers[key] = value.join(', '); // 数组转为逗号分隔的字符串
+                        headers[key] = value.join(', ');
                     } else if (value !== null && value !== undefined) {
-                        headers[key] = String(value);   // 其他类型转为字符串
-                    } // 忽略 null 和 undefined
+                        headers[key] = String(value);
+                    }
                 }
             }
 
@@ -56,10 +68,19 @@ export class NetworkManager {
             logger.error('网络请求失败:', {
                 url: config.url,
                 method: config.method,
-                error: error.message, // 或者更详细的错误信息
-                stack: error.stack
+                // data: config.data, // 根据需要记录请求数据
+                headers: config.headers,
+                error: error.message, // 或者更详细的错误信息 + 堆栈
+                stack: error.stack,
+                // 如果是 AxiosError，还可以包含更多信息
+                ...(error.response ? {
+                    status: error.response.status,
+                    responseHeaders: error.response.headers,
+                    responseData: error.response.data
+                } : {})
             });
-            throw new Error(`网络请求失败: ${error.message}`, { cause: error }); // 使用更现代的 Error 构造函数
+            // 抛出更友好的错误，包含 cause
+            throw new Error(`网络请求失败: ${error.message}`, { cause: error });
         }
     }
 }
