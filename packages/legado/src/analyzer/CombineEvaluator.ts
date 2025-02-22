@@ -1,7 +1,15 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
 
+/**
+ * 组合规则执行器。
+ * 用于组合多个规则执行器，实现 AND、OR、转置等操作。
+ */
 export class CombineEvaluator {
+  /**
+   * AND 组合。
+   * 将多个规则执行器的结果合并为一个数组。
+   */
   static And = class extends RuleEvaluator {
     private evals: RuleEvaluator[];
 
@@ -31,6 +39,7 @@ export class CombineEvaluator {
     }
 
     getElement(context: AnalyzerManager, value: any): any {
+      // AND 组合通常返回多个元素，这里返回数组
       return this.getElements(context, value);
     }
 
@@ -39,6 +48,10 @@ export class CombineEvaluator {
     }
   };
 
+  /**
+   * OR 组合。
+   * 返回第一个非空的结果。
+   */
   static Or = class extends RuleEvaluator {
     private evals: RuleEvaluator[];
 
@@ -68,6 +81,7 @@ export class CombineEvaluator {
     }
 
     getElement(context: AnalyzerManager, value: any): any {
+      // OR 组合通常返回第一个匹配的元素，这里返回数组
       return this.getElements(context, value);
     }
 
@@ -76,6 +90,10 @@ export class CombineEvaluator {
     }
   };
 
+  /**
+   * 转置组合。
+   * 将多个规则执行器的结果按列合并。
+   */
   static Transpose = class extends RuleEvaluator {
     private evals: RuleEvaluator[];
 
@@ -93,10 +111,13 @@ export class CombineEvaluator {
         }
       }
       const result: string[] = [];
-      for (let i = 0; i < arrays[0].length; i++) {
-        for (const array of arrays) {
-          if (i < array.length) {
-            result.push(array[i]);
+      // 假设所有子数组长度相同，以第一个子数组为基准
+      if (arrays.length > 0) {
+        for (let i = 0; i < arrays[0].length; i++) {
+          for (const array of arrays) {
+            if (i < array.length) {
+              result.push(array[i]);
+            }
           }
         }
       }
@@ -109,10 +130,13 @@ export class CombineEvaluator {
         arrays.push(_eval.getElements(context, value));
       }
       const result: any[] = [];
-      for (let i = 0; i < arrays[0].length; i++) {
-        for (const array of arrays) {
-          if (i < array.length) {
-            result.push(array[i]);
+      // 假设所有子数组长度相同，以第一个子数组为基准
+      if (arrays.length > 0) {
+        for (let i = 0; i < arrays[0].length; i++) {
+          for (const array of arrays) {
+            if (i < array.length) {
+              result.push(array[i]);
+            }
           }
         }
       }
@@ -120,6 +144,7 @@ export class CombineEvaluator {
     }
 
     getElement(context: AnalyzerManager, value: any): any {
+      // 转置 组合通常返回多个元素，这里返回数组
       return this.getElements(context, value);
     }
 

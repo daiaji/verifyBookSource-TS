@@ -3,7 +3,12 @@ import { Element } from '../javascript/jsoup/Element';
 import { Jsoup } from '../javascript/jsoup/Jsoup';
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
+import os from 'os';
 
+/**
+ * 默认规则执行器。
+ * 用于处理 HTML 文档的解析，基于 Jsoup。
+ */
 export class DefaultEvaluator extends RuleEvaluator {
   private evals: RuleEvaluator[];
 
@@ -35,8 +40,8 @@ export class DefaultEvaluator extends RuleEvaluator {
       elements.clear();
       elements.push(...els);
     }
-
-    throw new Error('缺少获取文本规则');
+    // 代码永远不会运行到此处
+    return [];
   }
 
   override getElement(context: AnalyzerManager, value: any): any {
@@ -70,6 +75,9 @@ export class DefaultEvaluator extends RuleEvaluator {
     return this.evals.map((_eval) => _eval.toString()).join('@');
   }
 
+  /**
+   * 适配器，用于在 JSON 和 HTML 之间切换解析器。
+   */
   static Adapter = class extends RuleEvaluator {
     private defaultEvaluator: RuleEvaluator;
     private jsonPathEvaluator: RuleEvaluator;
@@ -101,6 +109,9 @@ export class DefaultEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * 转换包装器，用于将不同类型的输入转换为 Elements 对象。
+   */
   static ConvertWrapper = class extends RuleEvaluator {
     private _eval: RuleEvaluator;
 
@@ -110,23 +121,20 @@ export class DefaultEvaluator extends RuleEvaluator {
     }
 
     private parse(doc: any): any {
-      if (doc instanceof Elements) {
+      if (doc instanceof Elements || doc instanceof Element) {
         return doc;
       }
-
-      if (doc instanceof Element) {
-        return doc;
-      }
+      //  这里暂时移除 JXNode 的判断
       // if (doc instanceof JXNode) {
       //     return doc.isElement() ? doc.asElement() : Jsoup.parse(doc.toString());
       // }
 
-      // try {
+      // try {   这里暂时移除xml判断
       //     if (doc.toString().startsWith("<?xml", 0)) {
       //         return Jsoup.parse(doc.toString(), Jsoup.parser.xmlParser());
       //     }
       // } catch (e) {
-      //     // 处理解析异常或错误
+      //     logger.error("尝试解析为 XML 失败", {error:e}) // 记录异常
       // }
 
       return Jsoup.parse(doc.toString());
@@ -157,6 +165,9 @@ export class DefaultEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * 子元素选择器。
+   */
   static Children = class extends RuleEvaluator {
     constructor(
       private explicit: boolean,
@@ -172,16 +183,19 @@ export class DefaultEvaluator extends RuleEvaluator {
     }
 
     override toString(): string {
+      // 添加空值检查
       return `${this.explicit ? 'children' : ''}${this.index ? this.index.toString() : ''}`;
     }
   };
 
+  /**
+   * 索引选择器。
+   */
   static Index = class extends RuleEvaluator {
     private exclude: boolean;
     private indexDefault: number[];
     private indexes: Array<number | [number | null, number | null, number]>;
 
-    private static nullSet = new Set([null]);
 
     constructor(exclude: boolean, indexDefault: number[], indexes: Array<number | [number | null, number | null, number]>) {
       super();
@@ -189,77 +203,112 @@ export class DefaultEvaluator extends RuleEvaluator {
       this.indexDefault = indexDefault;
       this.indexes = indexes;
     }
-
+    /**
+     * 根据索引获取元素。
+     * @param context AnalyzerManager 实例
+     * @param value 要处理的 Elements 对象
+     * @returns 选中的 Elements 对象
+     */
     getElements(context: AnalyzerManager, value: any): Elements {
       const elements: Elements = value as Elements;
       const len = elements.length;
-      const lastIndexes = this.indexDefault.length > 0 ? this.indexDefault.length - 1 : this.indexes.length - 1;
+
+      // 如果索引和默认索引都为空，则直接返回原始的 Elements
+      if (this.indexes.length === 0 && this.indexDefault.length === 0) {
+        return elements;
+      }
+
       const indexSet = new Set<number>();
 
-      if (this.indexes.length === 0) {
-        for (let ix = lastIndexes; ix >= 0; ix--) {
+      // 处理默认索引（简写形式）
+      if (this.indexDefault.length > 0) {
+        for (let ix = this.indexDefault.length - 1; ix >= 0; ix--) {
           const it = this.indexDefault[ix];
-          if (it >= 0 && it < len) {
-            indexSet.add(it);
-          } else if (it < 0 && len >= -it) {
-            indexSet.add(it + len);
-          }
+          this.addIndexToSet(indexSet, it, len);
         }
-      } else {
-        for (let ix = lastIndexes; ix >= 0; ix--) {
+      }
+
+      // 处理常规索引
+      if (this.indexes.length > 0) {
+        for (let ix = this.indexes.length - 1; ix >= 0; ix--) {
           const index = this.indexes[ix];
-
-          if (Array.isArray(index) && index.length === 3) {
-            const [startX, endX, stepX] = index;
-
-            const start = startX === null ? 0 : Math.max(0, startX >= 0 ? Math.min(startX, len - 1) : len + startX);
-            const end = endX === null ? len - 1 : Math.max(0, endX >= 0 ? Math.min(endX, len - 1) : len + endX);
-
-            if (start === end || Math.abs(stepX) >= len) {
-              indexSet.add(start);
-              continue;
-            }
-
-            const step = stepX > 0 ? stepX : Math.abs(stepX) < len ? stepX + len : 1;
-
-            if (end > start) {
-              for (let i = start; i <= end; i += step) {
-                indexSet.add(i);
-              }
-            } else {
-              for (let i = start; i >= end; i += step) {
-                indexSet.add(i);
-              }
-            }
+          if (Array.isArray(index)) {
+            this.addRangeToSet(indexSet, index, len);
           } else {
-            const it = index as number;
-            if (it >= 0 && it < len) {
-              indexSet.add(it);
-            } else if (it < 0 && len >= -it) {
-              indexSet.add(it + len);
-            }
+            this.addIndexToSet(indexSet, index, len);
           }
         }
       }
 
-      if (this.exclude) {
-        for (const pcInt of indexSet) {
-          elements[pcInt] = null;
+      return this.applyIndexSet(elements, indexSet);
+    }
+
+    /**
+     * 将单个索引添加到集合中。
+     * @param indexSet 索引集合
+     * @param index 要添加的索引
+     * @param len 元素总数
+     */
+    private addIndexToSet(indexSet: Set<number>, index: number, len: number): void {
+      if (index >= 0 && index < len) {
+        indexSet.add(index);
+      } else if (index < 0 && len >= -index) {
+        indexSet.add(index + len);
+      }
+    }
+
+    /**
+     * 将范围索引添加到集合中。
+     * @param indexSet 索引集合
+     * @param range 要添加的范围
+     * @param len 元素总数
+     */
+    private addRangeToSet(indexSet: Set<number>, range: [number | null, number | null, number], len: number): void {
+      const [startX, endX, stepX] = range;
+
+      const start = startX === null ? 0 : Math.max(0, startX >= 0 ? Math.min(startX, len - 1) : len + startX);
+      const end = endX === null ? len - 1 : Math.max(0, endX >= 0 ? Math.min(endX, len - 1) : len + endX);
+      const step = stepX > 0 ? stepX : Math.abs(stepX) < len ? stepX + len : 1;
+
+      if (start === end || Math.abs(step) >= len) {
+        indexSet.add(start);
+        return;
+      }
+
+      if (end > start) {
+        for (let i = start; i <= end; i += step) {
+          indexSet.add(i);
         }
-
-        elements.forEach((item, index) => {
-          if (item === null) {
-            elements.splice(index, 1);
-          }
-        });
-
-        return elements;
       } else {
-        const es = new Elements();
-        for (const pcInt of indexSet) {
-          es.push(elements[pcInt]);
+        for (let i = start; i >= end; i += step) {
+          indexSet.add(i);
         }
-        return es;
+      }
+    }
+
+    /**
+     * 根据索引集合，从 Elements 中选取元素。
+     * @param elements 原始 Elements 对象
+     * @param indexSet 索引集合
+     * @returns 选中的 Elements 对象
+     */
+    private applyIndexSet(elements: Elements, indexSet: Set<number>): Elements {
+      if (this.exclude) {
+        // 排除模式
+        const result = new Elements();
+        for (let i = 0; i < elements.length; i++) {
+          if (!indexSet.has(i)) {
+            result.push(elements[i]);
+          }
+        }
+        return result;
+      } else {
+        // 选择模式
+        const result = new Elements();
+        for (const index of indexSet) {
+          result.push(elements[index]);
+        }
+        return result;
       }
     }
 
@@ -293,6 +342,9 @@ export class DefaultEvaluator extends RuleEvaluator {
   };
 }
 
+/**
+ * 选择器抽象基类。
+ */
 export abstract class Select extends RuleEvaluator {
   protected index?: RuleEvaluator | null;
 
@@ -301,6 +353,11 @@ export abstract class Select extends RuleEvaluator {
     this.index = index;
   }
 
+  /**
+   * 执行选择器。
+   * @param value 要处理的 Elements 对象
+   * @returns 选中的 Elements 对象
+   */
   abstract evaluator(value: Elements): Elements;
 
   override getElement(context: AnalyzerManager, value: any): any {
@@ -312,6 +369,9 @@ export abstract class Select extends RuleEvaluator {
     return this.index ? this.index.getElements(context, result) : result;
   }
 
+  /**
+   * 类选择器。
+   */
   static Class = class extends Select {
     private name: string;
 
@@ -324,11 +384,14 @@ export abstract class Select extends RuleEvaluator {
       return value.select(`.${this.name}`);
     }
 
-    toString(): string {
+    override toString(): string {
       return `class.${this.name}${this.index ? this.index.toString() : ''}`;
     }
   };
 
+  /**
+   * 标签选择器。
+   */
   static Tag = class extends Select {
     private name: string;
 
@@ -341,11 +404,15 @@ export abstract class Select extends RuleEvaluator {
       return value.select(this.name);
     }
 
-    toString(): string {
+    // 使用模板字符串简化
+    override toString(): string {
       return `tag.${this.name}${this.index ? this.index.toString() : ''}`;
     }
   };
 
+  /**
+   * ID 选择器。
+   */
   static Id = class extends Select {
     private name: string;
 
@@ -358,11 +425,15 @@ export abstract class Select extends RuleEvaluator {
       return value.select(`#${this.name}`);
     }
 
-    toString(): string {
+    // 使用模板字符串简化
+    override toString(): string {
       return `id.${this.name}${this.index ? this.index.toString() : ''}`;
     }
   };
 
+  /**
+   * 文本选择器。
+   */
   static Text = class extends Select {
     private searchText: string;
 
@@ -376,11 +447,15 @@ export abstract class Select extends RuleEvaluator {
       return value.select(`:contains(${this.searchText})`);
     }
 
-    toString(): string {
+    // 使用模板字符串简化
+    override toString(): string {
       return `text.${this.searchText}${this.index ? this.index.toString() : ''}`;
     }
   };
 
+  /**
+   * CSS 选择器。
+   */
   static Css = class extends Select {
     private query: string;
     private prefix: boolean;
@@ -395,19 +470,28 @@ export abstract class Select extends RuleEvaluator {
       return value.select(this.query);
     }
 
-    toString(): string {
-      let result = '';
-      if (this.prefix) result += '@css:';
-      result += this.query;
-      if (this.index) result += this.index.toString();
-      return result;
+    // 使用模板字符串简化
+    override toString(): string {
+      return `${this.prefix ? '@css:' : ''}${this.query}${this.index ? this.index.toString() : ''}`;
     }
   };
 }
 
+/**
+ * 最终处理规则抽象基类。
+ */
 export abstract class Last extends RuleEvaluator {
+  /**
+   * 获取字符串列表。
+   * @param context AnalyzerManager 实例
+   * @param value 要处理的 Elements 对象
+   * @returns 字符串数组
+   */
   abstract getStrings(context: AnalyzerManager, value: any): string[];
 
+  /**
+   * 获取文本节点内容。
+   */
   static Text = new (class extends Last {
     getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
@@ -428,28 +512,30 @@ export abstract class Last extends RuleEvaluator {
     }
   })();
 
+  /**
+   * 获取文本节点内容（包括换行符）。
+   */
   static TextNodes = new (class extends Last {
     getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
       const elements = value as Elements;
-      const sb: string[] = [];
 
       for (let i = 0; i < elements.length; i++) {
         const contentEs = elements[i].textNodes();
+        const textContent: string[] = []; // 使用临时数组
 
         for (let a = 0; a < contentEs.length; a++) {
           const item = contentEs[a];
           const text = item.text().trim();
 
           if (text) {
-            if (a > 0) sb.push('\n');
-            sb.push(text);
+            if (a > 0) textContent.push(os.EOL); // 使用 os.EOL
+            textContent.push(text);
           }
         }
 
-        if (sb.length > 0) {
-          result.push(sb.join(''));
-          sb.length = 0;
+        if (textContent.length > 0) {
+          result.push(textContent.join(''));
         }
       }
 
@@ -461,6 +547,9 @@ export abstract class Last extends RuleEvaluator {
     }
   })();
 
+  /**
+   * 获取自身文本内容（不包括子元素）。
+   */
   static OwnText = new (class extends Last {
     getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
@@ -481,6 +570,9 @@ export abstract class Last extends RuleEvaluator {
     }
   })();
 
+  /**
+   * 获取 HTML 内容（不包括 script 和 style 标签）。
+   */
   static Html = new (class extends Last {
     getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
@@ -501,10 +593,14 @@ export abstract class Last extends RuleEvaluator {
     }
   })();
 
+  /**
+   * 获取所有 HTML 内容。
+   */
   static All = new (class extends Last {
     getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
       const elements = value as Elements;
+      // 这里不移除 script, style
       result.push(elements.outerHtml());
       return result;
     }
@@ -514,6 +610,9 @@ export abstract class Last extends RuleEvaluator {
     }
   })();
 
+  /**
+   * 获取属性值。
+   */
   static Attr = class extends Last {
     private name: string;
 

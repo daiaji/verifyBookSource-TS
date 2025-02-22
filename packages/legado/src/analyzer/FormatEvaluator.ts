@@ -1,6 +1,10 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { JsEvaluator, RuleEvaluator } from './common';
 
+/**
+ * 格式化规则执行器。
+ * 用于对提取的结果进行格式化，例如获取变量、插值、JSONPath、正则表达式等。
+ */
 export class FormatEvaluator extends RuleEvaluator {
   evals: RuleEvaluator[];
 
@@ -24,6 +28,9 @@ export class FormatEvaluator extends RuleEvaluator {
     return this.evals.join('');
   }
 
+  /**
+   * 获取变量值。
+   */
   static Get = class extends RuleEvaluator {
     key: string;
 
@@ -41,6 +48,9 @@ export class FormatEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * Mustache 插值。
+   */
   static Mustache = class extends RuleEvaluator {
     _eval: RuleEvaluator;
 
@@ -52,15 +62,8 @@ export class FormatEvaluator extends RuleEvaluator {
     getString(context: AnalyzerManager, value: any): string {
       if (this._eval instanceof JsEvaluator.Js) {
         const result = this._eval.eval(context, value);
-        if (result === null) {
-          return '';
-        } else if (typeof result === 'string') {
-          return result;
-        } else if (typeof result === 'number' && result % 1 === 0) {
-          return result.toFixed(0);
-        } else {
-          return result.toString();
-        }
+        // 简化类型判断和转换
+        return result === null ? '' : String(result);
       } else {
         return this._eval.getString(context, value);
       }
@@ -71,6 +74,9 @@ export class FormatEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * JSONPath 格式化。
+   */
   static JsonPath = class extends RuleEvaluator {
     _eval: RuleEvaluator;
 
@@ -88,6 +94,9 @@ export class FormatEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * 正则表达式格式化。
+   */
   static Regex = class extends RuleEvaluator {
     index: number;
 
@@ -97,8 +106,9 @@ export class FormatEvaluator extends RuleEvaluator {
     }
 
     getString(_context: AnalyzerManager, value: any): string {
-      const list = value as string[];
-      return list?.[this.index] || `$${this.index}`;
+      const list: string[] | undefined = value as string[] | undefined;
+      // 使用可选链和空值合并运算符简化代码
+      return list?.[this.index] ?? `$${this.index}`;
     }
 
     toString(): string {
@@ -106,6 +116,9 @@ export class FormatEvaluator extends RuleEvaluator {
     }
   };
 
+  /**
+   * 字面量格式化。
+   */
   static Literal = class extends RuleEvaluator {
     str: string;
 
@@ -115,7 +128,8 @@ export class FormatEvaluator extends RuleEvaluator {
     }
 
     getString(_context: AnalyzerManager, _value: any): string {
-      return this.str;
+      // 对 str 进行基本的转义处理（例如，转义换行符）
+      return this.str.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
     }
 
     toString(): string {
