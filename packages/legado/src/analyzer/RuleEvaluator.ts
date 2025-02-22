@@ -3,7 +3,18 @@ import { BaseRuleEvaluator } from './BaseRuleEvaluator';
 import { isExplicitObject } from './utils';
 import { FormatEvaluator, JsEvaluator, RegexEvaluator } from './common';
 
+/**
+ * 规则执行器。
+ * 实现了基本的规则处理逻辑，包括字符串提取、元素提取、序列执行、变量存储等。
+ */
 export abstract class RuleEvaluator extends BaseRuleEvaluator {
+  /**
+   * 获取单个字符串值。
+   * 如果结果为空数组，则返回空字符串；如果只有一个元素，则返回该元素；否则返回换行符连接的字符串。
+   * @param context AnalyzerManager 实例
+   * @param value 要处理的值
+   * @returns 字符串值
+   */
   override getString(context: AnalyzerManager, value?: any): string {
     const list = this.getStrings(context, value);
 
@@ -18,10 +29,20 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     return list.join('\n');
   }
 
+  /**
+   * 获取字符串值（不进行 URL 编码）。
+   * @param context AnalyzerManager 实例
+   * @param value 要处理的值
+   * @returns 字符串值
+   */
   override getString0(context: AnalyzerManager, value?: any): string {
     return this.getString(context, value);
   }
 
+  /**
+   * 规则执行序列。
+   * 用于按顺序执行多个规则。
+   */
   static Sequence = class extends RuleEvaluator {
     private evals: RuleEvaluator[];
 
@@ -30,133 +51,61 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       this.evals = evals;
     }
 
-    override getString0(context: AnalyzerManager, value?: any): string {
+    /**
+      * 统一执行规则的方法
+      * @param context AnalyzerManager 实例
+      * @param value  输入值
+      * @param method 执行的方法名
+      * @param isArray 是否为数组
+      * @returns 执行结果
+      */
+    private executeRules(context: AnalyzerManager, value: any, method: string, isArray: boolean = false): any {
       let lastResult = value;
-      let result = value;
+      let result: any = value;
 
       for (const _eval of this.evals) {
         if (_eval instanceof RuleEvaluator.Put) {
-          result = _eval.eval(context, value);
+          result = _eval.eval(context, lastResult);
         } else if (_eval instanceof JsEvaluator.Js) {
           result = _eval.eval(context, result);
         } else if (_eval instanceof FormatEvaluator) {
           result = _eval.getString(context, result);
         } else if (_eval instanceof RegexEvaluator) {
-          result = _eval.replace(context, lastResult, result);
+          result = isArray
+            ? (_eval as any).replaceList(context, lastResult, result)
+            : (_eval as any).replace(context, lastResult, result);
         } else {
-          result = _eval.getString0(context, result);
+          result = (_eval as any)[method](context, result);
         }
-
         lastResult = result;
-
         if (isExplicitObject(value)) break;
       }
+      // 统一处理结果
+      if (method === 'getStrings' && typeof result === 'string') {
+        return result.split('\n');
+      }
+      return (method === 'getElements' && !Array.isArray(result)) ? [] : result;
+    }
 
-      return result ? result.toString() : '';
+
+    override getString0(context: AnalyzerManager, value?: any): string {
+      return this.executeRules(context, value, 'getString0') || '';
     }
 
     override getString(context: AnalyzerManager, value?: any): string {
-      let lastResult = value;
-      let result = value;
-
-      for (const _eval of this.evals) {
-        if (_eval instanceof RuleEvaluator.Put) {
-          result = _eval.eval(context, lastResult);
-        } else if (_eval instanceof JsEvaluator.Js) {
-          result = _eval.eval(context, result);
-        } else if (_eval instanceof FormatEvaluator) {
-          result = _eval.getString(context, result);
-        } else if (_eval instanceof RegexEvaluator) {
-          result = _eval.replace(context, lastResult, result);
-        } else {
-          result = _eval.getString(context, result);
-        }
-
-        lastResult = result;
-
-        if (isExplicitObject(value)) break;
-      }
-
-      return result ? result.toString() : '';
+      return this.executeRules(context, value, 'getString') || '';
     }
 
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
-      let lastResult = value;
-      let result = value;
-
-      for (const _eval of this.evals) {
-        if (_eval instanceof RuleEvaluator.Put) {
-          result = _eval.eval(context, lastResult);
-        } else if (_eval instanceof JsEvaluator.Js) {
-          result = _eval.eval(context, result);
-        } else if (_eval instanceof FormatEvaluator) {
-          result = _eval.getString(context, result);
-        } else if (_eval instanceof RegexEvaluator) {
-          if (Array.isArray(result)) {
-            result = _eval.replaceList(context, lastResult, result);
-          } else {
-            result = _eval.replace(context, lastResult, result);
-          }
-        } else {
-          result = _eval.getStrings(context, result);
-        }
-
-        lastResult = result;
-
-        if (isExplicitObject(value)) break;
-      }
-
-      if (typeof result === 'string') {
-        result = result.split('\n');
-      }
-
-      return result as string[] | null;
+      return this.executeRules(context, value, 'getStrings', true);
     }
 
     override getElement(context: AnalyzerManager, value?: any): any {
-      let lastResult = value;
-      let result = value;
-
-      for (const _eval of this.evals) {
-        if (_eval instanceof RuleEvaluator.Put) {
-          result = _eval.eval(context, lastResult);
-        } else if (_eval instanceof JsEvaluator.Js) {
-          result = _eval.eval(context, result);
-        } else if (_eval instanceof FormatEvaluator) {
-          result = _eval.getString(context, result);
-        } else if (_eval instanceof RegexEvaluator) {
-          result = _eval.replace(context, lastResult, result);
-        } else {
-          result = _eval.getElement(context, result);
-        }
-
-        lastResult = result;
-      }
-
-      return result;
+      return this.executeRules(context, value, 'getElement');
     }
 
     override getElements(context: AnalyzerManager, value?: any): any[] {
-      let lastResult = value;
-      let result = value;
-
-      for (const _eval of this.evals) {
-        if (_eval instanceof RuleEvaluator.Put) {
-          result = _eval.eval(context, lastResult);
-        } else if (_eval instanceof JsEvaluator.Js) {
-          result = _eval.evalElements(context, result);
-        } else if (_eval instanceof FormatEvaluator) {
-          result = _eval.getString(context, result);
-        } else if (_eval instanceof RegexEvaluator) {
-          result = _eval.replaceList(context, lastResult, result);
-        } else {
-          result = _eval.getElements(context, result);
-        }
-
-        lastResult = result;
-      }
-
-      return Array.isArray(result) ? result : [];
+      return this.executeRules(context, value, 'getElements');
     }
 
     override toString(): string {
@@ -164,6 +113,10 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     }
   };
 
+  /**
+   * 变量存储规则。
+   * 用于将规则提取的结果存储到变量中。
+   */
   static Put = class extends RuleEvaluator {
     private putMap: Map<string, RuleEvaluator>;
 
@@ -172,8 +125,15 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       this.putMap = putMap;
     }
 
+    /**
+     * 执行变量存储操作。
+     * @param context AnalyzerManager 实例
+     * @param value 要处理的值
+     * @returns 原始值
+     */
     override eval(context: AnalyzerManager, value?: any): any {
       this.putMap.forEach((_eval, key) => {
+        // 此处不直接修改 context, 而是通过 context.put 方法
         context.put(key, _eval.getString(context, value));
       });
       return value;
@@ -185,11 +145,11 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     }
 
     override getElement(context: AnalyzerManager, value?: any): any {
-      return this.getElements(context, value);
+      return this.getElements(context, value); //保持原有逻辑
     }
 
     override getElements(context: AnalyzerManager, value: any): any[] {
-      this.eval(context, value);
+      this.eval(context, value);  //保持原有逻辑
       return [];
     }
 
@@ -198,6 +158,9 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     }
   };
 
+  /**
+     * 原生对象求值
+     */
   static NativeObjectEvaluator = class extends RuleEvaluator {
     private key: string;
 
@@ -208,21 +171,23 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
 
     override getString(context: AnalyzerManager, value?: any): string {
       const nativeObject = value;
-      return nativeObject[this.key]?.toString() || '';
+      // 进行空值检查
+      return nativeObject && nativeObject[this.key] ? nativeObject[this.key].toString() : '';
     }
 
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
       const nativeObject = value;
-      const result = nativeObject[this.key];
-
-      if (result === undefined) {
+      // 进行空值检查
+      if (!nativeObject || nativeObject[this.key] === undefined) {
         return null;
       }
 
+      const result = nativeObject[this.key];
+      // 统一处理为数组
       if (Array.isArray(result)) {
-        return result.map((item) => item.toString());
+        return result.map((item) => item ? item.toString() : '');
       } else {
-        return result.toString().split('\n');
+        return result ? result.toString().split('\n') : [];
       }
     }
 
@@ -231,6 +196,9 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     }
   };
 
+  /**
+    * 原生对象适配器
+    */
   static NativeObjectAdapter = class extends RuleEvaluator {
     private _eval: RuleEvaluator;
     private nativeObjectEvaluator: RuleEvaluator;
@@ -240,37 +208,31 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       this._eval = _eval;
       this.nativeObjectEvaluator = nativeObjectEvaluator;
     }
+    // 使用统一的方法进行判断
+    private check(value: any): boolean {
+      return isExplicitObject(value);
+    }
 
     override getString(context: AnalyzerManager, value?: any): string {
-      if (this.isExplicitObject(value)) {
-        return this.nativeObjectEvaluator.getString(context, value);
-      } else {
-        return this._eval.getString(context, value);
-      }
+      return this.check(value)
+        ? this.nativeObjectEvaluator.getString(context, value)
+        : this._eval.getString(context, value);
     }
 
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
-      if (this.isExplicitObject(value)) {
-        return this.nativeObjectEvaluator.getStrings(context, value);
-      } else {
-        return this._eval.getStrings(context, value);
-      }
+      return this.check(value)
+        ? this.nativeObjectEvaluator.getStrings(context, value)
+        : this._eval.getStrings(context, value);
     }
 
     override getString0(context: AnalyzerManager, value?: any): string {
-      if (this.isExplicitObject(value)) {
-        return this.nativeObjectEvaluator.getString(context, value);
-      } else {
-        return this._eval.getString0(context, value);
-      }
+      return this.check(value)
+        ? this.nativeObjectEvaluator.getString(context, value)
+        : this._eval.getString0(context, value);
     }
 
     override toString(): string {
       return this._eval.toString();
-    }
-
-    private isExplicitObject(value: any) {
-      return typeof value === 'object' && value !== null && value.constructor === Object;
     }
   };
 }

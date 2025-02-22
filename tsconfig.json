@@ -22,7 +22,7 @@
       ],
       "@any-reader/legado": [
         "./packages/legado/src/index.ts"
-      ] // 如果你直接 import 了 @any-reader/legado
+      ]
     }
   },
   "exclude": [
