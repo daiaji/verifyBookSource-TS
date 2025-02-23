@@ -60,12 +60,19 @@ export class FormatEvaluator extends RuleEvaluator {
     }
 
     override getString(context: AnalyzerManager, value: any): string {
-      if (this._eval instanceof JsEvaluator.Js) {
-        const result = this._eval.eval(context, value);
-        return safeString(result); // 使用 safeString
-      } else {
-        return safeString(this._eval.getString(context, value)); // 使用 safeString
-      }
+        if (this._eval instanceof JsEvaluator.Js) {
+            const result = this._eval.eval(context, value);
+            return safeString(result);
+        } else {
+            // 添加类型检查和安全调用
+            if (typeof this._eval.getString === 'function') {
+                return safeString(this._eval.getString(context, value));
+            } else {
+                // 如果 getString 不存在，可以选择抛出异常或者返回一个默认值
+                console.warn('getString method not found in _eval, returning empty string.');
+                return '';
+            }
+        }
     }
 
     override toString(): string {

@@ -9,6 +9,8 @@ export class RuleAnalyzer {
   public elementsType: string; // 当前分割字符串
   // 设置平衡组函数，根据上下文设定
   private chompBalanced: (a: string, b: string) => boolean;
+  // 转义字符
+  private static readonly ESC: string = '\\';
 
   constructor(data: string, code: boolean = false) {
     this.queue = data; // 初始化被处理字符串
@@ -375,7 +377,4 @@ export class RuleAnalyzer {
 
     return this.startX === 0 ? this.queue : st.join('') + this.queue.substring(this.startX);
   }
-
-  // 转义字符
-  private static readonly ESC: string = '\\';
 }

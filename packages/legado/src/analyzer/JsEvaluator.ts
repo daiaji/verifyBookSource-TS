@@ -4,28 +4,6 @@ import { isolate } from '../javascript/vm'; // 导入已定义的 isolate
 import { joinNonEmpty, safeString } from './utils';
 
 /**
- * 模拟 RhinoScriptEngine 的类。
- * 在这里，我们不真正编译脚本，只是为了保持接口一致性。
- */
-class RhinoScriptEngine {
-  static compile(js: string) {
-    return new CompiledScript(js);
-  }
-}
-
-/**
- * 模拟 CompiledScript 的类。
- */
-class CompiledScript {
-  private _js: string;
-
-  constructor(js: string) {
-    this._js = js;
-  }
-  // 可以添加 eval 方法来真正执行脚本，但需要考虑安全性和隔离性
-}
-
-/**
  * JavaScript 执行器抽象基类。
  * 所有具体的 JavaScript 执行器都应该继承此类。
  */
@@ -142,12 +120,12 @@ export abstract class JsEvaluator extends RuleEvaluator {
    */
   static ScriptLiteral = class extends JsEvaluator {
     private script: string;
-    private compiledScript: CompiledScript;
+    // private compiledScript: CompiledScript;   // 移除
 
     constructor(script: string) {
       super();
       this.script = script;
-      this.compiledScript = RhinoScriptEngine.compile(script); // 这里只是模拟编译
+      // this.compiledScript = RhinoScriptEngine.compile(script); // 这里只是模拟编译  //移除
     }
 
     /**
@@ -157,7 +135,7 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 编译后的脚本
      */
     override eval(_context: AnalyzerManager, _value?: any): any {
-      return this.compiledScript;
+      return this.script; // 直接返回
     }
 
     /**
@@ -167,7 +145,7 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 编译后的脚本
      */
     override evalElements(_context: AnalyzerManager, _value?: any): any {
-      return this.compiledScript;
+      return this.script;  // 直接返回
     }
 
     /**
@@ -201,7 +179,7 @@ export abstract class JsEvaluator extends RuleEvaluator {
      */
     override eval(context: AnalyzerManager, value?: any): any {
       // 每次 eval 时动态编译
-      return RhinoScriptEngine.compile(this.script.getString(context, value));
+      return this.script.getString(context, value);   // 直接返回, 不需要编译
     }
 
     /**
@@ -210,9 +188,8 @@ export abstract class JsEvaluator extends RuleEvaluator {
       * @param _value 要处理的值
       * @returns 编译后的脚本
       */
-    override evalElements(_context: AnalyzerManager, _value?: any): any {
-      // 这里也应该动态编译，但由于我们不真正编译，所以返回 script.toString()
-      return RhinoScriptEngine.compile(this.script.toString());
+    override evalElements(context: AnalyzerManager, value?: any): any {
+      return this.script.getString(context, value); // 直接返回, 不需要编译
     }
 
     /**

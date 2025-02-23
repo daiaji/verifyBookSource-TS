@@ -175,155 +175,156 @@ export class DefaultEvaluator extends RuleEvaluator {
   /**
    * 索引选择器。
    */
-  static Index = class extends RuleEvaluator {
-    private exclude: boolean;
-    private indexDefault: number[];
-    private indexes: Array<number | [number | null, number | null, number]>;
+    static Index = class extends RuleEvaluator {
+        private exclude: boolean;
+        private indexDefault: number[];
+        private indexes: Array<number | [number | null, number | null, number]>;
 
 
-    constructor(exclude: boolean, indexDefault: number[], indexes: Array<number | [number | null, number | null, number]>) {
-      super();
-      this.exclude = exclude;
-      this.indexDefault = indexDefault;
-      this.indexes = indexes;
-    }
-    /**
-     * 根据索引获取元素。
-     * @param context AnalyzerManager 实例
-     * @param value 要处理的 Elements 对象
-     * @returns 选中的 Elements 对象
-     */
-    getElements(context: AnalyzerManager, value: any): Elements {
-      const elements: Elements = value as Elements;
-      const len = elements.length;
-
-      // 如果索引和默认索引都为空，则直接返回原始的 Elements
-      if (this.indexes.length === 0 && this.indexDefault.length === 0) {
-        return elements;
-      }
-
-      const indexSet = new Set<number>();
-
-      // 处理默认索引（简写形式）
-      if (this.indexDefault.length > 0) {
-        for (let ix = this.indexDefault.length - 1; ix >= 0; ix--) {
-          const it = this.indexDefault[ix];
-          this.addIndexToSet(indexSet, it, len);
+        constructor(exclude: boolean, indexDefault: number[], indexes: Array<number | [number | null, number | null, number]>) {
+            super();
+            this.exclude = exclude;
+            this.indexDefault = indexDefault;
+            this.indexes = indexes;
         }
-      }
+        /**
+         * 根据索引获取元素。
+         * @param context AnalyzerManager 实例
+         * @param value 要处理的 Elements 对象
+         * @returns 选中的 Elements 对象
+         */
+        getElements(context: AnalyzerManager, value: any): Elements {
+            const elements: Elements = value as Elements;
+            const len = elements.length;
 
-      // 处理常规索引
-      if (this.indexes.length > 0) {
-        for (let ix = this.indexes.length - 1; ix >= 0; ix--) {
-          const index = this.indexes[ix];
-          if (Array.isArray(index)) {
-            this.addRangeToSet(indexSet, index, len);
-          } else {
-            this.addIndexToSet(indexSet, index, len);
-          }
-        }
-      }
-
-      return this.applyIndexSet(elements, indexSet);
-    }
-
-    /**
-     * 将单个索引添加到集合中。
-     * @param indexSet 索引集合
-     * @param index 要添加的索引
-     * @param len 元素总数
-     */
-    private addIndexToSet(indexSet: Set<number>, index: number, len: number): void {
-      if (index >= 0 && index < len) {
-        indexSet.add(index);
-      } else if (index < 0 && len >= -index) {
-        indexSet.add(index + len);
-      }
-    }
-
-    /**
-     * 将范围索引添加到集合中。
-     * @param indexSet 索引集合
-     * @param range 要添加的范围
-     * @param len 元素总数
-     */
-    private addRangeToSet(indexSet: Set<number>, range: [number | null, number | null, number], len: number): void {
-      const [startX, endX, stepX] = range;
-
-      const start = startX === null ? 0 : Math.max(0, startX >= 0 ? Math.min(startX, len - 1) : len + startX);
-      const end = endX === null ? len - 1 : Math.max(0, endX >= 0 ? Math.min(endX, len - 1) : len + endX);
-      const step = stepX > 0 ? stepX : Math.abs(stepX) < len ? stepX + len : 1;
-
-      if (start === end || Math.abs(step) >= len) {
-        indexSet.add(start);
-        return;
-      }
-
-      if (end > start) {
-        for (let i = start; i <= end; i += step) {
-          indexSet.add(i);
-        }
-      } else {
-        for (let i = start; i >= end; i += step) {
-          indexSet.add(i);
-        }
-      }
-    }
-
-    /**
-     * 根据索引集合，从 Elements 中选取元素。
-     * @param elements 原始 Elements 对象
-     * @param indexSet 索引集合
-     * @returns 选中的 Elements 对象
-     */
-    private applyIndexSet(elements: Elements, indexSet: Set<number>): Elements {
-      if (this.exclude) {
-        // 排除模式
-        const result = new Elements();
-        for (let i = 0; i < elements.length; i++) {
-          if (!indexSet.has(i)) {
-            result.push(elements[i]);
-          }
-        }
-        return result;
-      } else {
-        // 选择模式
-        const result = new Elements();
-        for (const index of indexSet) {
-          result.push(elements[index]);
-        }
-        return result;
-      }
-    }
-
-    override toString(): string {
-      const result: string[] = [];
-      if (this.indexDefault.length > 0) {
-        result.push(this.exclude ? '!' : '.');
-        result.push(this.indexDefault.reverse().join(':'));
-      } else {
-        result.push('[');
-        if (this.exclude) result.push('!');
-        this.indexes.reverse().forEach((index, i) => {
-          if (i > 0) result.push(',');
-          if (Array.isArray(index) && index.length === 3) {
-            const [start, end, step] = index;
-            if (start !== null) result.push(`${start}`);
-            result.push(':');
-            if (end !== null) result.push(`${end}`);
-            if (step !== 1) {
-              result.push(':');
-              result.push(`${step}`);
+            // 如果索引和默认索引都为空，则直接返回原始的 Elements
+            if (this.indexes.length === 0 && this.indexDefault.length === 0) {
+                return elements;
             }
-          } else {
-            result.push(`${index}`);
-          }
-        });
-        result.push(']');
-      }
-      return result.join('');
-    }
-  };
+
+            const indexSet = new Set<number>();
+
+            // 处理默认索引（简写形式）
+            if (this.indexDefault.length > 0) {
+                for (let ix = this.indexDefault.length - 1; ix >= 0; ix--) {
+                    const it = this.indexDefault[ix];
+                    this.addIndexToSet(indexSet, it, len);
+                }
+            }
+
+            // 处理常规索引
+            if (this.indexes.length > 0) {
+                for (let ix = this.indexes.length - 1; ix >= 0; ix--) {
+                    const index = this.indexes[ix];
+                    if (Array.isArray(index)) {
+                        this.addRangeToSet(indexSet, index, len);
+                    } else {
+                        this.addIndexToSet(indexSet, index, len);
+                    }
+                }
+            }
+
+            return this.applyIndexSet(elements, indexSet);
+        }
+
+        /**
+         * 将单个索引添加到集合中。
+         * @param indexSet 索引集合
+         * @param index 要添加的索引
+         * @param len 元素总数
+         */
+        private addIndexToSet(indexSet: Set<number>, index: number, len: number): void {
+            // 统一处理正负索引
+            const i = index < 0 ? len + index : index;
+            if (i >= 0 && i < len) {
+                indexSet.add(i);
+            }
+        }
+
+        /**
+         * 将范围索引添加到集合中。
+         * @param indexSet 索引集合
+         * @param range 要添加的范围, [start, end, step]
+         * @param len 元素总数
+         */
+        private addRangeToSet(indexSet: Set<number>, range: [number | null, number | null, number], len: number): void {
+            let [startX, endX, stepX] = range;
+
+            // 默认值处理
+            const step = stepX > 0 ? stepX : 1;
+            let start = startX === null ? 0 : (startX < 0 ? len + startX : startX);
+            let end = endX === null ? len - 1 : (endX < 0 ? len + endX : endX);
+
+            // 边界检查
+            start = Math.max(0, Math.min(start, len - 1));
+            end = Math.max(0, Math.min(end, len - 1));
+
+            // 根据 step 的方向，调整 start 和 end
+            if (step > 0) {
+                for (let i = start; i <= end; i += step) {
+                    indexSet.add(i);
+                }
+            } else {
+                for (let i = start; i >= end; i += step) {
+                    indexSet.add(i);
+                }
+            }
+        }
+
+        /**
+         * 根据索引集合，从 Elements 中选取元素。
+         * @param elements 原始 Elements 对象
+         * @param indexSet 索引集合
+         * @returns 选中的 Elements 对象
+         */
+        private applyIndexSet(elements: Elements, indexSet: Set<number>): Elements {
+            if (this.exclude) {
+                // 排除模式
+                const result = new Elements();
+                for (let i = 0; i < elements.length; i++) {
+                    if (!indexSet.has(i)) {
+                        result.push(elements[i]);
+                    }
+                }
+                return result;
+            } else {
+                // 选择模式
+                const result = new Elements();
+                for (const index of indexSet) {
+                    result.push(elements[index]);
+                }
+                return result;
+            }
+        }
+
+        override toString(): string {
+            const result: string[] = [];
+            if (this.indexDefault.length > 0) {
+                result.push(this.exclude ? '!' : '.');
+                result.push(this.indexDefault.reverse().join(':'));
+            } else {
+                result.push('[');
+                if (this.exclude) result.push('!');
+                this.indexes.reverse().forEach((index, i) => {
+                    if (i > 0) result.push(',');
+                    if (Array.isArray(index) && index.length === 3) {
+                        const [start, end, step] = index;
+                        if (start !== null) result.push(`${start}`);
+                        result.push(':');
+                        if (end !== null) result.push(`${end}`);
+                        if (step !== 1) {
+                            result.push(':');
+                            result.push(`${step}`);
+                        }
+                    } else {
+                        result.push(`${index}`);
+                    }
+                });
+                result.push(']');
+            }
+            return result.join('');
+        }
+    };
 }
 
 /**

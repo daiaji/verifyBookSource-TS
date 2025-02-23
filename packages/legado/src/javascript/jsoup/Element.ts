@@ -1,4 +1,4 @@
-import { AnyNode } from 'domhandler';
+import { AnyNode, Element as DomHandlerElement } from 'domhandler';
 import { Elements } from './Elements';
 import { $ } from './Jsoup';
 
@@ -20,23 +20,27 @@ export class Element {
     return $(this.element).text();
   }
 
-  ownText() {
-    return $(this.element)
-      .contents()
-      .filter((i, node) => {
-        return node.type === 'text' || $(node).prop('tagName') === 'br';
-      })
-      .map((i, el) => {
-        if (el.type === 'text') {
-          return (el as unknown as Text).data;
-        } else {
-          return ' ';
+    ownText() {
+        if (this.element.type === 'text') {
+          return (this.element as unknown as Text).data;
         }
-      })
-      .get()
-      .join('')
-      .replace(/\s+/g, ' ');
-  }
+    
+        const children = (this.element as DomHandlerElement).children;
+        if (!children) {
+          return '';
+        }
+    
+        let text = '';
+        for (const child of children) {
+          if (child.type === 'text') {
+            text += (child as unknown as Text).data;
+          } else if ($(child).prop('tagName') === 'br') {
+            text += ' '; // <br> 标签替换为空格
+          }
+        }
+    
+        return text.replace(/\s+/g, ' '); // 多个空格替换为一个
+      }
 
   textNodes() {
     const textNodes = $(this.element)

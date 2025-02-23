@@ -8,7 +8,7 @@ import { RuleAnalyzer } from './RuleAnalyzer';
 import { RuleEvaluator } from './RuleEvaluator';
 import { parseJson } from './utils';
 import { XPathEvaluator } from './XPathEvaluator';
-import { logger } from '@any-reader/utils'; // 导入 logger
+import { logger } from '@any-reader/utils';
 
 export class SourceRuleParser {
   private sourceRule: string;
@@ -72,7 +72,7 @@ export class SourceRuleParser {
           if (formatEval[1].includes('##')) {
             const regexResult = this.parseRegexRule(formatEval[1]);
             if (regexResult) {
-              evals.push(regexResult[1]);
+              evals.push(regexResult.evaluator);
             }
           }
           rootEvals.push(this.sequenceIfNeed(evals));
@@ -83,8 +83,8 @@ export class SourceRuleParser {
       // 解析 正则
       const regexResult = this.parseRegexRule(rule);
       if (regexResult) {
-        rule = regexResult[0];
-        regexEval = regexResult[1];
+        rule = regexResult.rule;
+        regexEval = regexResult.evaluator;
       }
       if (!rule) {
         if (regexEval) evals.push(regexEval);
@@ -232,7 +232,7 @@ export class SourceRuleParser {
       const last = this.getString ? rules.length - 1 : rules.length;
 
       for (let i = 0; i < last; i++) {
-        const [ruleNoIndex, index] = this.parseIndexSet(rules[i]);
+        const { rule: ruleNoIndex, index } = this.parseIndexSet(rules[i]);
         logger.debug(`parseIndexSet result: ruleNoIndex=${ruleNoIndex}, index=${index}`); // 打印解析结果
         subEvals.push(this.parseDefaultSelect(ruleNoIndex, index));
       }
@@ -302,121 +302,138 @@ export class SourceRuleParser {
     }
   }
 
-  private parseDefaultEnd(end: string): RuleEvaluator {
-    switch (end) {
-      case 'text':
-        return Last.Text;
-      case 'textNodes':
-        return Last.TextNodes;
-      case 'ownText':
-        return Last.OwnText;
-      case 'html':
-        return Last.Html;
-      case 'all':
-        return Last.All;
-      default:
-        return new Last.Attr(end);
-    }
-  }
-
-  private parseIndexSet(rule: string): [string, RuleEvaluator | null] {
-    const indexDefault: number[] = [];
-    const indexes: any[] = [];
-    let split = '.';
-    let beforeRule: string;
-
-    const rus = rule.trim();
-    let len = rus.length;
-    let curInt: number | null; // 当前数字
-    let curMinus = false; // 当前数字是否为负
-    const curList: (number | null)[] = []; // 当前数字区间
-    let l = ''; // 暂存数字字符串
-
-    const head = rus[rus.length - 1] === ']'; // 是否为常规索引写法
-
-    if (head) {
-      // 常规索引写法[index...]
-      len--; // 跳过尾部']'
-
-      while (len-- >= 0) {
-        // 逆向遍历, 可以无前置规则
-        const rl = rus[len];
-        if (rl === ' ') continue; // 跳过空格
-
-        if (rl >= '0' && rl <= '9') {
-          l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
-        } else if (rl === '-') {
-          curMinus = true;
-        } else {
-          curInt = l.length === 0 ? null : curMinus ? -parseInt(l) : parseInt(l); // 当前数字
-
-          switch (rl) {
-            case ':':
-              curList.push(curInt); // 区间右端或区间间隔
-              break;
-
+    private parseDefaultEnd(end: string): RuleEvaluator {
+        logger.debug(`parseDefaultEnd: 传入的 end 参数为: ${end}`);
+        let evaluator: RuleEvaluator;
+        switch (end) {
+            case 'text':
+                evaluator = Last.Text;
+                break;
+            case 'textNodes':
+                evaluator = Last.TextNodes;
+                break;
+            case 'ownText':
+                evaluator = Last.OwnText;
+                break;
+            case 'html':
+                evaluator = Last.Html;
+                break;
+            case 'all':
+                evaluator = Last.All;
+                break;
             default:
-              // 为保证查找顺序，区间和单个索引都添加到同一集合
-              if (curList.length === 0) {
-                if (curInt === null) break; // 是jsoup选择器而非索引列表，跳出
-                indexes.push(curInt);
-              } else {
-                // 列表最后压入的是区间右端，若列表有两位则最先压入的是间隔
-                indexes.push([curInt, curList[curList.length - 1], curList.length === 2 ? curList[0] : 1]);
-
-                curList.length = 0; // 重置临时列表，避免影响到下个区间的处理
-              }
-
-              if (rl === '!') {
-                split = '!';
-                do {
-                  len--;
-                } while (len > 0 && rus[len] === ' '); // 跳过所有空格
-              }
-
-              if (rl === '[') {
-                beforeRule = rus.substring(0, len); // 遇到索引边界，返回结果
-                return [beforeRule, new DefaultEvaluator.Index(split === '!', indexDefault, indexes)];
-              }
-
-              if (rl !== ',') break; // 非索引结构，跳出
-          }
-          l = ''; // 清空
-          curMinus = false; // 重置
+                evaluator = new Last.Attr(end);
         }
-      }
-    } else {
-      while (len-- >= 0) {
-        // 阅读原本写法，逆向遍历，可以无前置规则
-        const rl = rus[len];
-        if (rl === ' ') continue; // 跳过空格
-
-        if (rl >= '0' && rl <= '9') {
-          l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
-        } else if (rl === '-') {
-          curMinus = true;
-        } else {
-          if (rl === '!' || rl === '.' || rl === ':') {
-            // 分隔符或起始符
-            indexDefault.push(curMinus ? -parseInt(l) : parseInt(l)); // 当前数字追加到列表
-
-            if (rl !== ':') {
-              // rl === '!'  || rl === '.'
-              split = rl;
-              beforeRule = rus.substring(0, len);
-              return [beforeRule, new DefaultEvaluator.Index(split === '!', indexDefault, indexes)];
-            }
-          } else break; // 非索引结构，跳出循环
-
-          l = ''; // 清空
-          curMinus = false; // 重置
-        }
-      }
+        logger.debug(`parseDefaultEnd: 返回的 evaluator 类型为: ${evaluator.constructor.name}`);
+        return evaluator;
     }
 
-    beforeRule = rus;
-    return [beforeRule, null];
-  }
+    private parseIndexSet(rule: string): { rule: string; index: RuleEvaluator | null } {
+        logger.debug(`parseIndexSet: 传入的 rule 参数为: ${rule}`);
+        const indexDefault: number[] = [];
+        const indexes: any[] = [];
+        let split = '.';
+        let beforeRule: string;
+
+        const rus = rule.trim();
+        let len = rus.length;
+        let curInt: number | null; // 当前数字
+        let curMinus = false; // 当前数字是否为负
+        const curList: (number | null)[] = []; // 当前数字区间
+        let l = ''; // 暂存数字字符串
+
+        const head = rus[rus.length - 1] === ']'; // 是否为常规索引写法
+
+        if (head) {
+            // 常规索引写法[index...]
+            len--; // 跳过尾部']'
+
+            while (len-- >= 0) {
+                // 逆向遍历, 可以无前置规则
+                const rl = rus[len];
+                logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
+                if (rl === ' ') continue; // 跳过空格
+
+                if (rl >= '0' && rl <= '9') {
+                    l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
+                } else if (rl === '-') {
+                    curMinus = true;
+                } else {
+                    curInt = l.length === 0 ? null : curMinus ? -parseInt(l) : parseInt(l); // 当前数字
+
+                    switch (rl) {
+                        case ':':
+                            curList.push(curInt); // 区间右端或区间间隔
+                            break;
+
+                        default:
+                            // 为保证查找顺序，区间和单个索引都添加到同一集合
+                            if (curList.length === 0) {
+                                if (curInt === null) break; // 是jsoup选择器而非索引列表，跳出
+                                indexes.push(curInt);
+                            } else {
+                                // 列表最后压入的是区间右端，若列表有两位则最先压入的是间隔
+                                indexes.push([curInt, curList[curList.length - 1], curList.length === 2 ? curList[0] : 1]);
+
+                                curList.length = 0; // 重置临时列表，避免影响到下个区间的处理
+                            }
+
+                            if (rl === '!') {
+                                split = '!';
+                                do {
+                                    len--;
+                                } while (len > 0 && rus[len] === ' '); // 跳过所有空格
+                            }
+
+                            if (rl === '[') {
+                                beforeRule = rus.substring(0, len); // 遇到索引边界，返回结果
+                                const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
+                                logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
+                                return result;
+                            }
+
+                            if (rl !== ',') break; // 非索引结构，跳出
+                    }
+                    l = ''; // 清空
+                    curMinus = false; // 重置
+                }
+            }
+        } else {
+            while (len-- >= 0) {
+                // 阅读原本写法，逆向遍历，可以无前置规则
+                const rl = rus[len];
+                logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
+                if (rl === ' ') continue; // 跳过空格
+
+                if (rl >= '0' && rl <= '9') {
+                    l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
+                } else if (rl === '-') {
+                    curMinus = true;
+                } else {
+                    if (rl === '!' || rl === '.' || rl === ':') {
+                        // 分隔符或起始符
+                        indexDefault.push(curMinus ? -parseInt(l) : parseInt(l)); // 当前数字追加到列表
+
+                        if (rl !== ':') {
+                            // rl === '!'  || rl === '.'
+                            split = rl;
+                            beforeRule = rus.substring(0, len);
+                            const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
+                            logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
+                            return result;
+                        }
+                    } else break; // 非索引结构，跳出循环
+
+                    l = ''; // 清空
+                    curMinus = false; // 重置
+                }
+            }
+        }
+
+        beforeRule = rus;
+        logger.debug(`parseIndexSet: 返回结果为: rule=${beforeRule}, index=null`);
+        return { rule: beforeRule, index: null };
+    }
 
   private parsePrefix(ruleStr: string): string | null {
     if (ruleStr.startsWith('<js>')) return '<js>';
@@ -428,38 +445,43 @@ export class SourceRuleParser {
     return null;
   }
 
-  private parseRegexRule(ruleStr: string): [string, RuleEvaluator] | null {
-    const ruleStrS = ruleStr.split('##');
-    if (ruleStrS.length === 1) return null;
+    private parseRegexRule(ruleStr: string): { rule: string; evaluator: RuleEvaluator } | null {
+        logger.debug(`parseRegexRule: 传入的 ruleStr 参数为: ${ruleStr}`);
+        const ruleStrS = ruleStr.split('##');
+        if (ruleStrS.length === 1) return null;
 
-    let replaceRegex: string | null = null;
-    let replacement = '';
-    let replaceFirst = false;
+        let replaceRegex: string | null = null;
+        let replacement = '';
+        let replaceFirst = false;
 
-    if (ruleStrS.length > 1) {
-      replaceRegex = ruleStrS[1];
+        if (ruleStrS.length > 1) {
+            replaceRegex = ruleStrS[1];
+        }
+        if (ruleStrS.length > 2) {
+            replacement = ruleStrS[2];
+        }
+        if (ruleStrS.length > 3) {
+            replaceFirst = true;
+        }
+        logger.debug(`parseRegexRule: 解析得到 replaceRegex=${replaceRegex}, replacement=${replacement}, replaceFirst=${replaceFirst}`);
+
+        let formatResult = this.parseFormat(replaceRegex!, false, false);
+
+        const regexEval = formatResult ? new RegexEvaluator.RegexEval(formatResult[0]) : new RegexEvaluator.RegexLiteral(replaceRegex!);
+
+        formatResult = this.parseFormat(replacement, false, false);
+
+        const replacementEval = formatResult ? new RegexEvaluator.ReplacementEval(formatResult[0]) : new RegexEvaluator.ReplacementLiteral(replacement);
+
+        const _eval = replaceFirst ? new RegexEvaluator.ReplaceFirst(regexEval, replacementEval) : new RegexEvaluator.Replace(regexEval, replacementEval);
+
+        const result = { rule: ruleStrS[0].trim(), evaluator: _eval };
+        logger.debug(`parseRegexRule: 返回结果为: rule=${result.rule}, evaluator=${result.evaluator}`);
+        return result;
     }
-    if (ruleStrS.length > 2) {
-      replacement = ruleStrS[2];
-    }
-    if (ruleStrS.length > 3) {
-      replaceFirst = true;
-    }
-
-    let formatResult = this.parseFormat(replaceRegex!, false, false);
-
-    const regexEval = formatResult ? new RegexEvaluator.RegexEval(formatResult[0]) : new RegexEvaluator.RegexLiteral(replaceRegex!);
-
-    formatResult = this.parseFormat(replacement, false, false);
-
-    const replacementEval = formatResult ? new RegexEvaluator.ReplacementEval(formatResult[0]) : new RegexEvaluator.ReplacementLiteral(replacement);
-
-    const _eval = replaceFirst ? new RegexEvaluator.ReplaceFirst(regexEval, replacementEval) : new RegexEvaluator.Replace(regexEval, replacementEval);
-
-    return [ruleStrS[0].trim(), _eval];
-  }
 
   private parseFormat(ruleStr: string, dollarSign: boolean = true, excludeRegex: boolean = true): [RuleEvaluator, string] | null {
+    logger.debug(`parseFormat: 传入的参数为 ruleStr=${ruleStr}, dollarSign=${dollarSign}, excludeRegex=${excludeRegex}`);
     const evals: RuleEvaluator[] = [];
     let start = 0;
     this.evalPattern.lastIndex = 0;
@@ -468,6 +490,7 @@ export class SourceRuleParser {
     if (!matcher) return null;
 
     do {
+      logger.debug(`parseFormat: 当前 matcher=${matcher}, index=${matcher.index}`);
       if (matcher.index > start) {
         const tmp = ruleStr.substring(start, matcher.index);
         if (tmp.length > 0) {
@@ -491,6 +514,7 @@ export class SourceRuleParser {
       }
 
       const group = matcher[0];
+      logger.debug(`parseFormat: 当前 group=${group}`);
       switch (true) {
         case group.startsWith('@get:'):
           evals.push(new FormatEvaluator.Get(group.substring(6)));
@@ -519,13 +543,13 @@ export class SourceRuleParser {
     }
     if (tmp.length > 0) {
       evals.push(new FormatEvaluator.Literal(tmp));
-      start += tmp.length;
     }
-
+    logger.debug(`parseFormat: 返回结果为: ${[new FormatEvaluator(evals), ruleStr.substring(start)]}`);
     return [new FormatEvaluator(evals), ruleStr.substring(start)];
   }
 
   private separateRule(ruleStr: string): string[] {
+    logger.debug(`separateRule: 传入的参数为 ruleStr=${ruleStr}`);
     return this.separate(this.JS_PATTERN, ruleStr);
   }
 
@@ -559,12 +583,14 @@ export class SourceRuleParser {
   }
 
   private parsePutRule(ruleStr: string, putMap: Map<string, RuleEvaluator>): string {
+    logger.debug(`parsePutRule: 传入的参数为 ruleStr=${ruleStr}`);
     let vRuleStr = ruleStr;
     const regex = new RegExp(this.putPattern);
     let match = regex.exec(vRuleStr);
 
     while (match) {
       vRuleStr = vRuleStr.replace(match[0], '');
+      logger.debug(`parsePutRule: 当前 vRuleStr=${vRuleStr}`);
       const jsonString = match[1];
       const map = parseJson<Map<string, string>>(jsonString);
 
@@ -573,10 +599,10 @@ export class SourceRuleParser {
           putMap.set(key, SourceRuleParser.parseStrings(value));
         }
       }
-
+        logger.debug(`parsePutRule: 当前 putMap=${JSON.stringify(Array.from(putMap.entries()))}`);
       match = regex.exec(vRuleStr);
     }
-
+    logger.debug(`parsePutRule: 返回结果为: ${vRuleStr}`);
     return vRuleStr;
   }
 

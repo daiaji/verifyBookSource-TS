@@ -82,7 +82,7 @@ export class LegadoRuleManager implements RuleManager {
         const bookList: SearchItem[] = [];
 
         for (const [index, item] of list.entries()) {
-            logger.silly(`正在处理搜索结果项: ${index + 1}/${list.length}`);
+            logger.silly(`正在处理搜索结果项: ${index + 1}/${list.length}, item: ${item}`);
             analyzeRule.setContent(item);
             const name = Fmt.bookName(analyzeRule.getString(ruleName, 'name'));
             const author = Fmt.author(analyzeRule.getString(ruleAuthor, 'author'));
@@ -172,7 +172,7 @@ export class LegadoRuleManager implements RuleManager {
 
         const chapters: ChapterItem[] = [];
         for (const [index, item] of chapterList.entries()) {
-            logger.silly(`正在处理章节: ${index + 1}/${chapterList.length}`);
+            logger.silly(`正在处理章节: ${index + 1}/${chapterList.length}, item: ${item}`);
             analyzeRule.setContent(item);
             const name = analyzeRule.getString(ruleName, 'chapterName');
             const url = analyzeRule.getString(ruleChapterUrl, 'chapterUrl', null, true);

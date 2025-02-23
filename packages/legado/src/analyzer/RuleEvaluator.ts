@@ -209,7 +209,7 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
   /**
     * 原生对象适配器
     */
-  static NativeObjectAdapter = class extends RuleEvaluator {
+    static NativeObjectAdapter = class extends RuleEvaluator {
     private _eval: RuleEvaluator;
     private nativeObjectEvaluator: RuleEvaluator;
 
@@ -218,10 +218,10 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       this._eval = _eval;
       this.nativeObjectEvaluator = nativeObjectEvaluator;
     }
-    // 使用统一的方法进行判断
-    private check(value: any): boolean {
-      return isExplicitObject(value);
-    }
+        // 使用统一的方法进行判断
+        private check(value: any): boolean {
+            return isExplicitObject(value);
+        }
 
     override getString(context: AnalyzerManager, value?: any): string {
       return this.check(value)

@@ -40,13 +40,14 @@ export class Elements extends Array {
     this.length = 0;
   }
 
-  addAll(items: AnyNode[] | Elements) { // 使用 AnyNode
-    if (items instanceof Elements) {
-      this.push(...items);
-    } else {
-      this.push(...items.map((el) => new Element(el)));
+    addAll(items: AnyNode[] | Elements) {
+        if (items instanceof Elements) {
+            this.push(...items); // 直接 push Elements 的元素
+        } else {
+            // 使用 Array.from 确保 items 是数组
+            this.push(...Array.from(items).map((el) => new Element(el)));
+        }
     }
-  }
 
   outerHtml(): string {
     return $(this.getAnyNodes()).prop('outerHTML')!!;

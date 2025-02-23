@@ -64,7 +64,7 @@ export function parseSafely<T>(parser: () => T, errorMessage: string, context?: 
   try {
     return parser();
   } catch (e: any) {
-    logger.error(errorMessage, { ...context, error: e, stack: e.stack });
+    logger.error(errorMessage, { ...context, error: e.message, stack: e.stack });
     return null;
   }
 }
@@ -76,7 +76,7 @@ export function parseSafely<T>(parser: () => T, errorMessage: string, context?: 
  * @param returnValue 出现错误后的返回值
  */
 export function handleError<T>(errorMessage: string, context?: any, returnValue?: T): T {
-  logger.error(errorMessage, context);
+  logger.error(errorMessage, { ...context, stack: context?.error?.stack });
   return returnValue as T;
 }
 
@@ -86,27 +86,23 @@ export function handleError<T>(errorMessage: string, context?: any, returnValue?
  * @returns Elements 对象，如果输入无效则返回 null
  */
 export function ensureElements(doc: any): Elements | null {
-  if (doc instanceof Elements) {
-    return doc;
-  }
-  if (doc instanceof Element) {
-    return new Elements(doc);
-  }
+    if (doc instanceof Elements) {
+        return doc;
+    }
+    if (doc instanceof Element) {
+        return new Elements(doc);
+    }
+    if (typeof doc === 'string') {
+        const parsed = parseSafely(
+            () => Jsoup.parse(doc),
+            'HTML 解析失败 (ensureElements):',
+            { doc }
+        );
+        return parsed instanceof Elements ? parsed : (parsed ? new Elements(parsed) : null);
+    }
 
-  // 安全地尝试将输入转换为字符串
-  const content = typeof doc === 'string' ? doc : (doc != null ? String(doc) : null);
-  if (!content) {
-    logger.warn('ensureElements: Input is null, undefined, or cannot be converted to a string.');
+    logger.warn('ensureElements: Input is null, undefined, or cannot be converted to a string or Elements.');
     return null;
-  }
-
-  const parsed = parseSafely(
-    () => Jsoup.parse(content),
-    'HTML 解析失败 (ensureElements):',
-    { doc: content } // 传入的是content字符串
-  );
-
-  return parsed instanceof Elements ? parsed : (parsed ? new Elements(parsed) : null);
 }
 
 /**
