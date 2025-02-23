@@ -1,5 +1,6 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
+import { handleError, joinNonEmpty, safeString } from './utils';
 
 /**
  * 正则表达式规则执行器抽象基类。
@@ -25,15 +26,13 @@ export abstract class RegexEvaluator extends RuleEvaluator {
   abstract replaceList(context: AnalyzerManager, beforeContent: any, content: any): string[];
 
   override getStrings(context: AnalyzerManager, value: any): string[] {
-    if (Array.isArray(value)) {
-      return this.replaceList(context, value, value);
-    } else {
-      return this.replace(context, value, value?.toString() || '').split('\n');
-    }
+    return Array.isArray(value)
+      ? this.replaceList(context, value, value)
+      : this.replace(context, value, safeString(value)).split('\n'); // 使用 safeString
   }
 
   override getString(context: AnalyzerManager, value: any): string {
-    return this.replace(context, value, value?.toString() || '');
+    return this.replace(context, value, safeString(value)); // 使用 safeString
   }
 
   /**
@@ -48,7 +47,7 @@ export abstract class RegexEvaluator extends RuleEvaluator {
     }
 
     override replace(context: AnalyzerManager, beforeContent: any, content: any): string {
-      const vResult = content?.toString() || '';
+      const vResult = safeString(content); // 使用 safeString
       if (!vResult) return '';
 
       const replacement = this.replacementEval.getString(context, beforeContent);
@@ -64,7 +63,7 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         }
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        console.error(`正则表达式替换失败: ${e.message}`, { regex: regex?.toString(), replacement, content: vResult });
+        handleError('正则表达式替换失败:', { regex: regex?.toString(), replacement, content: vResult, error: e, stack: e.stack }, vResult);
         return vResult; // 发生错误时，返回原始字符串
       }
     }
@@ -86,14 +85,20 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         }
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        console.error(`正则表达式替换列表失败: ${e.message}`, { regex: regex?.toString(), replacement, content: resultList });
+        handleError('正则表达式替换列表失败:', { regex: regex?.toString(), replacement, content: resultList, error: e, stack: e.stack }, resultList.map(String));
         return resultList.map(String); // 发生错误时，返回原始字符串数组
       }
     }
 
     override toString(): string {
       const replacement = this.replacementEval.toString();
-      return replacement ? `##${this.regexEval}##${this.replacementEval}` : `##${this.regexEval}`;
+      // 使用 joinNonEmpty
+      return joinNonEmpty('', [
+        '##',
+        this.regexEval.toString(),
+        '##',
+        replacement,
+      ]);
     }
   };
 
@@ -109,7 +114,7 @@ export abstract class RegexEvaluator extends RuleEvaluator {
     }
 
     override replace(context: AnalyzerManager, beforeContent: any, content: any): string {
-      const result = beforeContent?.toString() || '';
+      const result = safeString(beforeContent); // 使用 safeString
       const replacement = this.replacementEval.getString(context, result);
       const regex = this.regexEval.eval(context, result) as RegExp;
 
@@ -119,16 +124,13 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       }
       try {
         const match = String(content).match(regex);
-
         if (!match) {
           return '';
         }
-
         return match[0].replace(regex, replacement);
       } catch (e: any) {
-        // 捕获正则表达式相关的异常
-        console.error(`正则表达式首次替换失败: ${e.message}`, { regex: regex.toString(), replacement, content });
-        return String(content); // 发生错误时，返回原始字符串
+        handleError('正则表达式首次替换失败:', { regex: regex.toString(), replacement, content, error: e, stack: e.stack }, String(content));
+        return String(content);
       }
     }
 
@@ -151,13 +153,20 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         });
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        console.error(`正则表达式首次替换列表失败: ${e.message}`, { regex: regex?.toString(), replacement, content: resultList });
+        handleError('正则表达式首次替换列表失败: ', { regex: regex?.toString(), replacement, content: resultList, error: e, stack: e.stack }, resultList.map(String));
         return resultList.map(String); // 发生错误时，返回原始字符串数组
       }
     }
 
     override toString(): string {
-      return `##${this.regexEval}##${this.replacementEval}###`;
+      // 使用 joinNonEmpty
+      return joinNonEmpty('', [
+        '##',
+        this.regexEval.toString(),
+        '##',
+        this.replacementEval.toString(),
+        '###',
+      ]);
     }
   };
 
@@ -171,12 +180,16 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       super();
       this.regex = this.compileRegex(str);
     }
-
+    /**
+     * 编译正则表达式。
+     * @param str 正则表达式字符串
+     * @returns 编译后的 RegExp 对象，如果编译失败则返回 null
+     */
     private compileRegex(str: string): RegExp | null {
       try {
         return new RegExp(str);
       } catch (e: any) {
-        console.error(`编译正则表达式失败: ${e.message}`, { regex: str });
+        handleError('编译正则表达式失败:', { regex: str, error: e, stack: e.stack }, null);
         return null; // 编译失败时返回 null
       }
     }
@@ -207,7 +220,7 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       try {
         return new RegExp(regex);
       } catch (e: any) {
-        console.error(`编译正则表达式失败: ${e.message}`, { regex });
+        handleError('编译正则表达式失败:', { regex, error: e, stack: e.stack }, regex);
         return regex; // 编译失败时返回原始字符串
       }
     }
@@ -256,73 +269,113 @@ export abstract class RegexEvaluator extends RuleEvaluator {
    */
   static AllInOne = class extends RuleEvaluator {
     private patterns: RegExp[];
-
+    private static readonly MAX_PATTERN_LENGTH = 200; // 最大模式长度，防止 ReDoS
+    private static readonly MAX_INPUT_LENGTH = 10000; // 最大输入长度, 防止 ReDoS
     constructor(private regexStrList: string[]) {
       super();
+      this.patterns = this.compilePatterns(regexStrList);
+    }
+    /**
+     * 编译正则表达式模式。
+     * @param regexStrList 正则表达式字符串列表
+     * @returns 编译后的 RegExp 对象数组
+     */
+    private compilePatterns(regexStrList: string[]): RegExp[] {
       try {
-        this.patterns = regexStrList.map((str) => new RegExp(str));
+        return regexStrList.map(str => {
+          if (str.length > RegexEvaluator.AllInOne.MAX_PATTERN_LENGTH) {
+            handleError('正则表达式过长，可能存在 ReDoS 风险:', { regex: str }, null);
+            return /./; // 返回一个无害的正则表达式
+          }
+          return new RegExp(str);
+        });
       } catch (e: any) {
-        console.error(`编译正则表达式失败: ${e.message}`, { regexStrList });
-        this.patterns = []; // 编译失败时设置为空数组
+        handleError('编译正则表达式失败:', { regexStrList, error: e, stack: e.stack }, []);
+        return []; // 编译失败时设置为空数组
       }
     }
-
-    private prepare(value: any): string | null {
-      let result = value?.toString() || '';
-      const sb = [];
-
-      for (let i = 0; i < this.patterns.length - 1; i++) {
-        const pattern = this.patterns[i];
-        try {
-          const matcher = result.match(pattern);
-          if (!matcher) return null;
-
-          sb.push(...matcher);
-          result = sb.join('');
-          sb.length = 0;
-        } catch (e: any) {
-          console.error(`正则表达式匹配失败: ${e.message}`, { pattern: pattern.toString(), content: result });
-          return null; // 匹配失败时返回 null
-        }
-      }
-
-      return result;
-    }
-
-    override getElement(_context: AnalyzerManager, value: any): any | null {
-      const result = this.prepare(value);
-      if (!result) return null;
-
-      const pattern = this.patterns[this.patterns.length - 1];
+    /**
+     * 匹配并提取字符串。
+     * @param content 要匹配的字符串
+     * @param pattern 正则表达式模式
+     * @returns 匹配结果数组，如果没有匹配则返回 null
+     */
+    private matchAndExtract(content: string, pattern: RegExp): string[] | null {
       try {
-        const matcher = result.match(pattern);
-        if (!matcher) return null;
-
-        return [...matcher];
+        const matcher = content.match(pattern);
+        return matcher;
       } catch (e: any) {
-        console.error(`正则表达式匹配失败: ${e.message}`, { pattern: pattern.toString(), content: result });
+        handleError('正则表达式匹配失败: ', { pattern: pattern.toString(), content: content, error: e, stack: e.stack }, null);
         return null; // 匹配失败时返回 null
       }
     }
+    /**
+     * 处理匹配结果。
+     * @param content 要处理的字符串
+     * @returns 提取的字符串数组，如果没有匹配则返回 null
+     */
+    private processMatches(content: string): string[] | null {
+      let result = safeString(content); // 使用 safeString
+      const sb = [];
 
-    override getElements(_context: AnalyzerManager, value: any): any[] {
-      const result = this.prepare(value);
-      if (!result) return [];
+      for (let i = 0; i < this.patterns.length - 1; i++) {
+        if (result.length > RegexEvaluator.AllInOne.MAX_INPUT_LENGTH) {
+          handleError('输入字符串过长，可能存在 ReDoS 风险:', { content }, null);
+          return null;
+        }
+        const matcher = this.matchAndExtract(result, this.patterns[i]);
+        if (!matcher) return null;
+        sb.push(...matcher);
+        result = sb.join('');
+        sb.length = 0;
+      }
 
-      const pattern = this.patterns[this.patterns.length - 1];
+      const lastPattern = this.patterns[this.patterns.length - 1];
+      return this.matchAndExtract(result, lastPattern);
+    }
+    /**
+     * 处理所有匹配结果。
+     * @param content 要处理的字符串
+     * @returns 所有匹配结果的数组
+     */
+    private processAllMatches(content: string): any[] {
+      let result = safeString(content); // 使用 safeString
+      const sb = [];
+
+      for (let i = 0; i < this.patterns.length - 1; i++) {
+        if (result.length > RegexEvaluator.AllInOne.MAX_INPUT_LENGTH) {
+          handleError('输入字符串过长，可能存在 ReDoS 风险: ', { content }, []);
+          return [];
+        }
+        const matcher = this.matchAndExtract(result, this.patterns[i]);
+        if (!matcher) return [];
+        sb.push(...matcher);
+        result = sb.join('');
+        sb.length = 0;
+      }
+
+      const lastPattern = this.patterns[this.patterns.length - 1];
       const matches = [];
       let match;
 
       try {
-        while ((match = pattern.exec(result))) {
+        while ((match = lastPattern.exec(result))) {
           matches.push([...match]);
         }
       } catch (e: any) {
-        console.error(`正则表达式匹配失败: ${e.message}`, { pattern: pattern.toString(), content: result });
+        handleError('正则表达式匹配失败: ', { pattern: lastPattern.toString(), content: result, error: e, stack: e.stack }, []);
         return []; // 匹配失败时返回空数组
       }
-
       return matches;
+    }
+
+
+    override getElement(_context: AnalyzerManager, value: any): any | null {
+      return this.processMatches(value);
+    }
+
+    override getElements(_context: AnalyzerManager, value: any): any[] {
+      return this.processAllMatches(value);
     }
 
     override toString(): string {

@@ -1,6 +1,6 @@
 import { fromByteArray, toByteArray } from 'base64-js';
 import pako from 'pako';
-import { Rule } from '../type'; // 从 type.d.ts 导入
+import { Rule } from './type'; // 从 type.d.ts 导入
 import { TAG } from './config';
 
 const { deflate, inflate } = pako;

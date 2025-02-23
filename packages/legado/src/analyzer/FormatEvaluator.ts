@@ -1,5 +1,6 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { JsEvaluator, RuleEvaluator } from './common';
+import { joinNonEmpty, safeString } from './utils'; // 导入工具函数
 
 /**
  * 格式化规则执行器。
@@ -13,19 +14,18 @@ export class FormatEvaluator extends RuleEvaluator {
     this.evals = evals;
   }
 
-  getString(context: AnalyzerManager, value: any): string {
-    return this.evals
-      .map((_eval) => _eval.getString(context, value))
-      .join('')
-      .trim();
+  override getString(context: AnalyzerManager, value: any): string {
+    // 使用 joinNonEmpty 和 map
+    return joinNonEmpty('', this.evals.map((_eval) => _eval.getString(context, value))).trim();
   }
 
-  getStrings(context: AnalyzerManager, value: any): string[] {
+  override getStrings(context: AnalyzerManager, value: any): string[] {
     return this.getString(context, value).split('\n');
   }
 
-  toString(): string {
-    return this.evals.join('');
+  override toString(): string {
+    // 使用 joinNonEmpty
+    return joinNonEmpty('', this.evals.map(e => e.toString()));
   }
 
   /**
@@ -39,11 +39,11 @@ export class FormatEvaluator extends RuleEvaluator {
       this.key = key;
     }
 
-    getString(context: AnalyzerManager, _value: any): string {
-      return context.get(this.key);
+    override getString(context: AnalyzerManager, _value: any): string {
+      return safeString(context.get(this.key)); // 使用 safeString
     }
 
-    toString(): string {
+    override toString(): string {
       return `@get:{${this.key}}`;
     }
   };
@@ -59,17 +59,16 @@ export class FormatEvaluator extends RuleEvaluator {
       this._eval = _eval;
     }
 
-    getString(context: AnalyzerManager, value: any): string {
+    override getString(context: AnalyzerManager, value: any): string {
       if (this._eval instanceof JsEvaluator.Js) {
         const result = this._eval.eval(context, value);
-        // 简化类型判断和转换
-        return result === null ? '' : String(result);
+        return safeString(result); // 使用 safeString
       } else {
-        return this._eval.getString(context, value);
+        return safeString(this._eval.getString(context, value)); // 使用 safeString
       }
     }
 
-    toString(): string {
+    override toString(): string {
       return `{{${this._eval}}}`;
     }
   };
@@ -85,11 +84,11 @@ export class FormatEvaluator extends RuleEvaluator {
       this._eval = _eval;
     }
 
-    getString(context: AnalyzerManager, value: any): string {
-      return this._eval.getString(context, value);
+    override getString(context: AnalyzerManager, value: any): string {
+      return safeString(this._eval.getString(context, value)); // 使用 safeString
     }
 
-    toString(): string {
+    override toString(): string {
       return `{${this._eval}}`;
     }
   };
@@ -105,13 +104,12 @@ export class FormatEvaluator extends RuleEvaluator {
       this.index = index;
     }
 
-    getString(_context: AnalyzerManager, value: any): string {
+    override getString(_context: AnalyzerManager, value: any): string {
       const list: string[] | undefined = value as string[] | undefined;
-      // 使用可选链和空值合并运算符简化代码
-      return list?.[this.index] ?? `$${this.index}`;
+      return list?.[this.index] ?? '';
     }
 
-    toString(): string {
+    override toString(): string {
       return `$${this.index}`;
     }
   };
@@ -127,12 +125,11 @@ export class FormatEvaluator extends RuleEvaluator {
       this.str = str;
     }
 
-    getString(_context: AnalyzerManager, _value: any): string {
-      // 对 str 进行基本的转义处理（例如，转义换行符）
-      return this.str.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    override getString(_context: AnalyzerManager, _value: any): string {
+      return safeString(this.str.replace(/\n/g, '\\n').replace(/\r/g, '\\r')); // 使用 safeString
     }
 
-    toString(): string {
+    override toString(): string {
       return this.str;
     }
   };

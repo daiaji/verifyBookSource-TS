@@ -1,6 +1,6 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { BaseRuleEvaluator } from './BaseRuleEvaluator';
-import { isExplicitObject } from './utils';
+import { isExplicitObject, joinNonEmpty, safeString, splitLines } from './utils';
 import { FormatEvaluator, JsEvaluator, RegexEvaluator } from './common';
 
 /**
@@ -25,8 +25,8 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     if (list.length === 1) {
       return list[0];
     }
-
-    return list.join('\n');
+    // 使用 joinNonEmpty，以换行符连接
+    return joinNonEmpty('\n', list);
   }
 
   /**
@@ -71,9 +71,18 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
         } else if (_eval instanceof FormatEvaluator) {
           result = _eval.getString(context, result);
         } else if (_eval instanceof RegexEvaluator) {
-          result = isArray
-            ? (_eval as any).replaceList(context, lastResult, result)
-            : (_eval as any).replace(context, lastResult, result);
+          if (isArray) {
+            // 添加类型判断
+            if (typeof (_eval as any).replaceList === 'function') {
+              result = (_eval as any).replaceList(context, lastResult, result);
+            } else {
+              // 如果 replaceList 不存在，可以选择抛出异常或者使用 replace 代替
+              console.warn('replaceList method not found in RegexEvaluator, using replace instead.');
+              result = (_eval as any).replace(context, lastResult, result);
+            }
+          } else {
+            result = (_eval as any).replace(context, lastResult, result);
+          }
         } else {
           result = (_eval as any)[method](context, result);
         }
@@ -82,18 +91,18 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       }
       // 统一处理结果
       if (method === 'getStrings' && typeof result === 'string') {
-        return result.split('\n');
+        return splitLines(result); // 使用 splitLines
       }
       return (method === 'getElements' && !Array.isArray(result)) ? [] : result;
     }
 
 
     override getString0(context: AnalyzerManager, value?: any): string {
-      return this.executeRules(context, value, 'getString0') || '';
+      return safeString(this.executeRules(context, value, 'getString0'));
     }
 
     override getString(context: AnalyzerManager, value?: any): string {
-      return this.executeRules(context, value, 'getString') || '';
+      return safeString(this.executeRules(context, value, 'getString'));
     }
 
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
@@ -109,7 +118,7 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
     }
 
     override toString(): string {
-      return this.evals.map((_eval) => _eval.toString()).join('');
+      return joinNonEmpty('', this.evals.map((_eval) => _eval.toString()));
     }
   };
 
@@ -148,7 +157,7 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       return this.getElements(context, value); //保持原有逻辑
     }
 
-    override getElements(context: AnalyzerManager, value: any): any[] {
+    override getElements(context: AnalyzerManager, value?: any): any[] {
       this.eval(context, value);  //保持原有逻辑
       return [];
     }
@@ -171,8 +180,7 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
 
     override getString(context: AnalyzerManager, value?: any): string {
       const nativeObject = value;
-      // 进行空值检查
-      return nativeObject && nativeObject[this.key] ? nativeObject[this.key].toString() : '';
+      return safeString(nativeObject?.[this.key]);
     }
 
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
@@ -185,9 +193,11 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       const result = nativeObject[this.key];
       // 统一处理为数组
       if (Array.isArray(result)) {
-        return result.map((item) => item ? item.toString() : '');
+        // 使用 safeString 和 map
+        return result.map(item => safeString(item));
       } else {
-        return result ? result.toString().split('\n') : [];
+        // 使用 splitLines 和 safeString
+        return splitLines(safeString(result));
       }
     }
 

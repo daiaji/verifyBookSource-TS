@@ -13,8 +13,14 @@
   "exports": {
     ".": {
       "require": "./dist/index.cjs",
-      "import": "./dist/index.mjs"
-    }
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    },
+      "./type": {
+        "require": "./dist/type.cjs",
+        "import": "./dist/type.mjs",
+        "types": "./dist/type.d.ts"
+      }
   },
   "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
@@ -30,8 +36,7 @@
     "fast-xml-parser": "^4.5.2",
     "pako": "^2.1.0",
     "unbuild": "^3.3.1",
-    "uuid": "^10.0.0",
-    "@any-reader/utils": "*"
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@types/pako": "^2.0.3",

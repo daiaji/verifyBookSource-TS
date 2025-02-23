@@ -1,22 +1,40 @@
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosResponseHeaders } from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import logger from './logger';
 
+/**
+ * 网络请求响应接口。
+ *
+ * @template T 响应数据类型
+ */
 export interface NetworkResponse<T> {
+    /** 响应数据 */
     data: T;
+    /** 响应状态码 */
     status: number;
+    /** 响应头 */
     headers: Record<string, string>; // 保持 Record<string, string>
-    raw: AxiosResponse; // 原始响应对象 (可选)
+    /** 原始的 Axios 响应对象 */
+    raw: AxiosResponse;
 }
 
+/**
+ * 网络请求管理器类。
+ */
 export class NetworkManager {
     private http = axios.create(); // 可以配置 axios 实例, 比如 timeout
 
+    /**
+     * 构造函数。
+     * @param {string} [baseURL] 基础 URL
+     */
     constructor(private baseURL?: string) { }
+
     /**
      * 发送 GET 请求。
-     * @param url 请求的 URL。
-     * @param config  可选的 Axios 请求配置。
-     * @returns  包含响应数据的 Promise。
+     * @param {string} url 请求的 URL。
+     * @param {AxiosRequestConfig} [config] 可选的 Axios 请求配置。
+     * @returns {Promise<NetworkResponse<T>>} 包含响应数据的 Promise。
+     * @template T 响应数据类型
      */
     async get<T>(url: string, config?: AxiosRequestConfig): Promise<NetworkResponse<T>> {
         return this.request<T>({ ...config, method: 'GET', url });
@@ -24,10 +42,11 @@ export class NetworkManager {
 
     /**
      * 发送 POST 请求。
-     * @param url 请求的 URL。
-     * @param data  可选的请求体数据。
-     * @param config 可选的 Axios 请求配置。
-     * @returns 包含响应数据的 Promise。
+     * @param {string} url 请求的 URL。
+     * @param {any} [data] 可选的请求体数据。
+     * @param {AxiosRequestConfig} [config] 可选的 Axios 请求配置。
+     * @returns {Promise<NetworkResponse<T>>} 包含响应数据的 Promise。
+     * @template T 响应数据类型
      */
     async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<NetworkResponse<T>> {
         return this.request<T>({ ...config, method: 'POST', url, data });
@@ -35,6 +54,12 @@ export class NetworkManager {
 
     // 其他请求方法 (put, delete, patch) ...
 
+    /**
+     * 发送网络请求。
+     * @param {AxiosRequestConfig} config Axios 请求配置。
+     * @returns {Promise<NetworkResponse<T>>} 包含响应数据的 Promise。
+     * @template T 响应数据类型
+     */
     async request<T>(config: AxiosRequestConfig): Promise<NetworkResponse<T>> {
         try {
             if (this.baseURL && !config.baseURL) {

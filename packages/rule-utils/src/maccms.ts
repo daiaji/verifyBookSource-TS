@@ -1,5 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { Rule } from '../type';
+import type { Rule } from './type';
 import { createRule } from './rule';
 import { USER_AGENT } from './config';
 import { NetworkManager, logger } from '@any-reader/utils';

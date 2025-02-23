@@ -1,6 +1,6 @@
 import { decodeRule } from './compress';
 import { NetworkManager, logger } from '@any-reader/utils';
-import { Rule } from '../type';
+import { Rule } from './type';
 /**
  * @param {string} str
  * @returns {boolean}

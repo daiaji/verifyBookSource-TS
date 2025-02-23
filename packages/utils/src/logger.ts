@@ -8,21 +8,38 @@ dotenv.config();
 
 // --- 配置部分 (可提取到单独的配置文件) ---
 
+/**
+ * 日志配置接口。
+ */
 interface LoggerConfig {
+  /** 是否启用日志记录 */
   enabled: boolean;
+  /** 默认日志级别 */
   level: string;
+  /** 日志文件路径 (已弃用, 推荐使用 dailyRotateFile) */
   file?: string;
+  /** 是否输出到控制台 */
   console: boolean;
+  /** 日志格式化选项 */
   format?: {
+    /** 时间戳格式 */
     timestamp?: string;
+    /** 是否显示文件信息 */
     showFileInfo?: boolean;
+    /** 是否显示调用函数 */
     showCallerFunction?: boolean;
+    /** 是否美化输出元数据 */
     prettyPrintMeta?: boolean;
   };
+  /** 各个模块的日志级别 */
   moduleLevels?: Record<string, string>;
+  /** DailyRotateFile 插件的配置 */
   dailyRotateFile?: DailyRotateFile.DailyRotateFileTransportOptions;
 }
 
+/**
+ * 默认日志配置。
+ */
 const defaultConfig: LoggerConfig = {
   enabled: true,
   level: 'info', // 默认日志级别
@@ -42,7 +59,10 @@ const defaultConfig: LoggerConfig = {
   },
 };
 
-// 从环境变量或配置文件加载配置, 覆盖默认值
+/**
+ * 从环境变量或配置文件加载日志配置。
+ * @returns {LoggerConfig} 合并后的日志配置
+ */
 function loadConfig(): LoggerConfig {
   let fileConfig: Partial<LoggerConfig> = {};
   if (process.env.LOG_FILE) {
@@ -89,7 +109,9 @@ const config = loadConfig();
 
 const { combine, timestamp, colorize, errors, printf } = format;
 
-// 自定义格式化函数 (核心)
+/**
+ * 自定义日志格式化函数。
+ */
 const customFormat = printf(({ timestamp, level, message, fileInfo, callerFunction, ...meta }) => {
   // 1. 组装基本信息 (时间戳、级别)
   let logMessage = `${timestamp} [${level}]`; // level 已经包含了颜色
@@ -119,7 +141,9 @@ const customFormat = printf(({ timestamp, level, message, fileInfo, callerFuncti
   return logMessage;
 });
 
-// 为控制台和文件创建不同的格式化器
+/**
+ * 控制台日志格式化器。
+ */
 const consoleFormat = combine(
   timestamp({ format: config.format?.timestamp }),
   errors({ stack: true }),
@@ -127,6 +151,9 @@ const consoleFormat = combine(
   customFormat
 );
 
+/**
+ * 文件日志格式化器。
+ */
 const fileFormat = combine(
   timestamp({ format: config.format?.timestamp }),
   errors({ stack: true }),
@@ -147,6 +174,11 @@ const logger = createLogger({
 
 // --- 辅助函数: 获取文件信息 ---
 
+/**
+ * 获取调用栈信息。
+ * @param {number} stackLevel 堆栈层级
+ * @returns {{ fileInfo: string; callerFunction: string }} 文件信息和调用函数名
+ */
 function getFileInfo(stackLevel: number): { fileInfo: string; callerFunction: string } {
   const stack = new Error().stack?.split('\n');
   let fileInfo = '';
@@ -172,6 +204,12 @@ function getFileInfo(stackLevel: number): { fileInfo: string; callerFunction: st
 
 // --- 日志记录函数 (核心) ---
 
+/**
+ * 记录日志。
+ * @param {string} level 日志级别
+ * @param {any} message 日志消息
+ * @param {...any[]} meta 元数据
+ */
 function log(level: string, message: any, ...meta: any[]): void {
   // 1. 获取调用位置信息
   const { fileInfo, callerFunction } = getFileInfo(4);
@@ -191,13 +229,45 @@ function log(level: string, message: any, ...meta: any[]): void {
 }
 
 // --- 导出日志接口 ---
-
+/**
+ * 日志记录器实例。
+ */
 const logWrapper = {
+  /**
+   * 记录错误日志。
+   * @param {any} message 错误消息
+   * @param {...any[]} meta 元数据
+   */
   error: (message: any, ...meta: any[]) => log('error', message, ...meta),
+  /**
+   * 记录警告日志。
+   * @param {any} message 警告消息
+   * @param {...any[]} meta 元数据
+   */
   warn: (message: any, ...meta: any[]) => log('warn', message, ...meta),
+  /**
+   * 记录信息日志。
+   * @param {any} message 信息消息
+   * @param {...any[]} meta 元数据
+   */
   info: (message: any, ...meta: any[]) => log('info', message, ...meta),
+  /**
+   * 记录详细日志。
+   * @param {any} message 详细消息
+   * @param {...any[]} meta 元数据
+   */
   verbose: (message: any, ...meta: any[]) => log('verbose', message, ...meta),
+  /**
+   * 记录调试日志。
+   * @param {any} message 调试消息
+   * @param {...any[]} meta 元数据
+   */
   debug: (message: any, ...meta: any[]) => log('debug', message, ...meta),
+  /**
+   * 记录Silly日志。
+   * @param {any} message  Silly消息
+   * @param {...any[]} meta 元数据
+   */
   silly: (message: any, ...meta: any[]) => log('silly', message, ...meta),
 };
 

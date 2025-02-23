@@ -1,16 +1,16 @@
 import { isolate } from '../javascript/vm';
 import { parseJson } from './utils';
 import { RuleAnalyzer } from './RuleAnalyzer';
-import { NetworkUtils, NetworkManager, NetworkResponse } from '@any-reader/utils'; // 从 utils 包导入
+import { NetworkUtils, NetworkManager, NetworkResponse } from '@any-reader/utils';
 import contentType from 'content-type';
 import iconv from 'iconv-lite';
 import chardet from 'chardet';
 import { encode } from 'urlencode';
 import { load } from 'cheerio';
-import { logger } from '@any-reader/utils'; // 导入 logger
+import { logger } from '@any-reader/utils';
 
 /**
- * 请求方法枚举
+ * 请求方法枚举。
  */
 enum RequestMethod {
   GET = 'GET',
@@ -18,22 +18,33 @@ enum RequestMethod {
 }
 
 /**
- * URL 选项配置接口
+ * URL 解析选项接口。
  */
 interface UrlOptions {
+  /** 请求方法 */
   method?: RequestMethod;
+  /** 字符编码 */
   charset?: string;
+  /** 请求头 */
   headers?: Record<string, string>;
+  /** 请求体 */
   body?: string | null;
+  /** 重试次数 */
   retry?: number;
+  /** 请求类型 */
   type?: string | null;
+  /** 是否使用 WebView */
   useWebView?: boolean;
+  /** WebView 加载的 JavaScript 代码 */
   webJs?: string | null;
+  /** 直接执行的 JavaScript 代码 */
   js?: string | null;
+  /** 服务器 ID */
   serverID?: number | null;
 }
+
 /**
- * URL 分析器类
+ * URL 解析类。
  */
 export class AnalyzeUrl {
   private JS_PATTERN: RegExp = /<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/gi;
@@ -55,15 +66,19 @@ export class AnalyzeUrl {
   public fieldMap: Record<string, string> = {};
 
   /**
-   * 构造函数
-   * @param config URL 配置对象
+   * 构造函数。
+   * @param {string} url 要解析的 URL
+   * @param {string | null} [key] 搜索关键字
+   * @param {number | null} [page] 页码
+   * @param {string} [baseUrl] 基础 URL
+   * @param {NetworkManager} [networkManager] 网络请求管理器实例
    */
   constructor(
     public url: string,
     public key?: string | null,
     public page?: number | null,
     baseUrl?: string,
-    private networkManager: NetworkManager = new NetworkManager() // 依赖注入 NetworkManager
+    private networkManager: NetworkManager = new NetworkManager()
   ) {
     this.baseUrl = baseUrl ?? '';
     const urlMatcher = this.paramPattern.exec(this.baseUrl);
@@ -74,7 +89,8 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 初始化 URL 分析器
+   * 初始化 AnalyzeUrl 实例。
+   * @returns {Promise<this>}  返回自身
    */
   async init() {
     await this.initUrl();
@@ -82,7 +98,8 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 初始化 URL
+   * 初始化 URL。
+   * @private
    */
   private async initUrl() {
     this.ruleUrl = this.url;
@@ -92,45 +109,42 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 执行 @js,<js></js> 代码
+   * 解析 URL 中的 JS 代码。
+   * @private
    */
   private async analyzeJs(): Promise<void> {
     this.ruleUrl = await this.processJsBlocks(this.ruleUrl);
   }
 
   /**
-   * 处理 JS 代码块
-   * @param input 包含 JS 代码块的字符串
-   * @returns 处理后的字符串
+   * 处理 JS 代码块。
+   * @param {string} input 包含 JS 代码的字符串
+   * @returns {Promise<string>} 处理后的字符串
+   * @private
    */
   private async processJsBlocks(input: string): Promise<string> {
-    let start = 0;
     let result = input;
+    let start = 0;
     let match: RegExpExecArray | null;
 
     while ((match = this.JS_PATTERN.exec(input)) !== null) {
       if (match.index > start) {
-        const substring = input.substring(start, match.index).trim();
-        if (substring.length > 0) {
-          result = substring.replace('@result', result);
+        const preJsStr = input.substring(start, match.index).trim();
+        if (preJsStr.length > 0) {
+          result = preJsStr.replace('@result', result);
         }
       }
 
-      try {
-        const jsResult = await this.evalJS(match[1] || match[2], result);
-        result = jsResult ? String(jsResult) : '';
-      } catch (e: any) {
-        logger.error('执行 JS 失败:', { js: match[1] || match[2], error: e, stack: e.stack });
-        result = ''; // 错误时设置为空字符串
-      }
+      const jsCode = match[1] || match[2];
+      result = await this.executeAndHandleJs(jsCode, result);
 
       start = match.index + match[0].length;
     }
 
     if (input.length > start) {
-      const substring = input.substring(start).trim();
-      if (substring.length > 0) {
-        result = substring.replace('@result', result);
+      const lastStr = input.substring(start).trim();
+      if (lastStr.length > 0) {
+        result = lastStr.replace('@result', result);
       }
     }
 
@@ -138,7 +152,25 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 替换关键字、页码和内嵌的 JS 代码
+   * 执行 JS 代码并处理异常。
+   * @param {string} jsCode 要执行的 JS 代码
+   * @param {any} context JS 执行的上下文
+   * @returns {Promise<string>} 执行结果
+   * @private
+   */
+  private async executeAndHandleJs(jsCode: string, context: any): Promise<string> {
+    try {
+      const jsResult = await this.evalJS(jsCode, context);
+      return jsResult ? String(jsResult) : '';
+    } catch (e: any) {
+      logger.error('执行 JS 失败:', { js: jsCode, error: e, stack: e.stack });
+      return '';
+    }
+  }
+
+  /**
+   * 替换 URL 中的关键字和页码占位符。
+   * @private
    */
   private async replaceKeyPageJs(): Promise<void> {
     this.ruleUrl = await this.processInnerJs(this.ruleUrl);
@@ -146,10 +178,11 @@ export class AnalyzeUrl {
   }
 
   /**
-    * 处理内嵌的 {{...}} JS 代码
-    * @param input 包含 {{...}} 的字符串
-    * @returns 替换后的字符串
-    */
+   * 处理内嵌的 JS 代码。
+   * @param {string} input 包含内嵌 JS 代码的字符串
+   * @returns {Promise<string>} 处理后的字符串
+   * @private
+   */
   private async processInnerJs(input: string): Promise<string> {
     if (!input.includes('{{') || !input.includes('}}')) {
       return input;
@@ -162,15 +195,16 @@ export class AnalyzeUrl {
         return jsEval ? String(jsEval) : '';
       } catch (e: any) {
         logger.error('执行内嵌 JS 失败:', { js: jsCode, error: e, stack: e.stack });
-        return ''; // 错误时返回空字符串
+        return '';
       }
     });
   }
 
   /**
-   * 替换页码占位符 <...>
-   * @param input 包含 <...> 的字符串
-   * @returns 替换后的字符串
+   * 替换页码占位符。
+   * @param {string} input 包含页码占位符的字符串
+   * @returns {string} 替换后的字符串
+   * @private
    */
   private replacePagePlaceholder(input: string): string {
     if (!this.page) {
@@ -184,14 +218,15 @@ export class AnalyzeUrl {
         ? pages[this.page - 1].trim()
         : pages[pages.length - 1].trim();
       input = input.replace(match[0], replacement);
-      match = this.pagePattern.exec(input); // 继续查找下一个匹配
+      match = this.pagePattern.exec(input);
     }
     return input;
   }
 
   /**
- * 解析 URL 和选项
- */
+   * 解析 URL 和选项。
+   * @private
+   */
   private async analyzeUrl(): Promise<void> {
     const [urlNoOption, optionJson] = this.extractUrlAndOptions(this.ruleUrl);
 
@@ -207,9 +242,10 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 提取 URL 和选项部分
-   * @param ruleUrl 完整的 URL 规则字符串
-   * @returns [URL, 选项 JSON 字符串]
+   * 提取 URL 和选项。
+   * @param {string} ruleUrl 包含 URL 和选项的字符串
+   * @returns {[string, string | null]} URL 和选项的元组
+   * @private
    */
   private extractUrlAndOptions(ruleUrl: string): [string, string | null] {
     const urlMatcher = this.paramPattern.exec(ruleUrl);
@@ -219,8 +255,9 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 处理 URL 选项
-   * @param optionJson 选项 JSON 字符串
+   * 处理 URL 选项。
+   * @param {string} optionJson 选项的 JSON 字符串
+   * @private
    */
   private async processUrlOptions(optionJson: string): Promise<void> {
     const option = parseJson<UrlOptions>(optionJson);
@@ -249,7 +286,8 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 处理查询参数
+   * 处理查询参数。
+   * @private
    */
   private processQueryParameters(): void {
     if (this.method === RequestMethod.GET) {
@@ -266,8 +304,8 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 解析查询参数或表单字段
-   * @param fieldsTxt 查询参数或表单字段字符串
+   * 解析字段。
+   * @param {string} fieldsTxt 字段字符串
    */
   public analyzeFields(fieldsTxt: string): void {
     const queryPairs = fieldsTxt.split('&').filter(s => s.trim()).map(s => s.split('=', 2));
@@ -278,9 +316,10 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 根据字符集编码字段值
-   * @param value 字段值
-   * @returns 编码后的字段值
+   * 编码字段值。
+   * @param {string} value 字段值
+   * @returns {string} 编码后的字段值
+   * @private
    */
   private encodeFieldValue(value: string): string {
     if (!this.charset) {
@@ -293,8 +332,8 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 获取字符串类型的响应
-   * @returns 包含响应结果的 Promise
+   * 获取字符串响应。
+   * @returns {Promise<{ raw: any; body: string }>} 包含原始响应和解码后响应体的对象
    */
   async getStrResponseAwait(): Promise<{ raw: any; body: string }> {
     const requestConfig: any = {
@@ -314,19 +353,20 @@ export class AnalyzeUrl {
     };
 
     logger.debug('请求配置:', { requestConfig });
-    const resp = await this.networkManager.request(requestConfig);  // 使用 networkManager
+    const resp = await this.networkManager.request(requestConfig);
     logger.debug('响应头:', { headers: resp.headers });
     logger.debug('响应状态码:', { status: resp.status });
 
     return {
-      raw: resp.raw, // 确保这里返回了原始响应对象
+      raw: resp.raw,
       body: this.decodeResponseBody(resp),
     };
   }
 
   /**
-   * 构建表单数据
-   * @returns 表单数据字符串
+   * 构建表单数据。
+   * @returns {string} 表单数据字符串
+   * @private
    */
   private buildFormData(): string {
     return Object.entries(this.fieldMap)
@@ -335,16 +375,16 @@ export class AnalyzeUrl {
   }
 
   /**
- * 解码响应体
- * @param response 
- * @returns 
- */
+   * 解码响应体。
+   * @param {NetworkResponse<any>} response 网络响应对象
+   * @returns {string} 解码后的响应体字符串
+   * @private
+   */
   private decodeResponseBody(response: NetworkResponse<any>): string {
     const ct = contentType.parse(response.headers['content-type'] || '');
     let encoding = ct.parameters.charset || this.charset;
     if (!encoding) encoding = chardet.detect(response.data);
     let str = iconv.decode(response.data, encoding || 'utf8');
-    // 对 HTML 进行进一步处理
     if (ct.type === 'text/html' && /<!doctype html>/i.test(str)) {
       str = load(str, null, true).html();
     }
@@ -352,9 +392,9 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 检查文本是否为 JSON 格式
-   * @param text 要检查的文本
-   * @returns 如果文本是 JSON 格式，则返回 true；否则返回 false
+   * 检查字符串是否为 JSON 格式。
+   * @param {string | null} text 要检查的字符串
+   * @returns {boolean} 如果是 JSON 格式，则返回 true；否则返回 false
    */
   public isJson(text: string | null): boolean {
     if (!text) {
@@ -365,9 +405,9 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 检查文本是否为 XML 格式
-   * @param text 要检查的文本
-   * @returns 如果文本是 XML 格式，则返回 true；否则返回 false
+   * 检查字符串是否为 XML 格式。
+   * @param {string | null} text 要检查的字符串
+   * @returns {boolean} 如果是 XML 格式，则返回 true；否则返回 false
    */
   public isXml(text: string | null): boolean {
     if (!text) {
@@ -378,15 +418,14 @@ export class AnalyzeUrl {
   }
 
   /**
-   * 执行 JavaScript 代码
-   * @param jsStr 要执行的 JavaScript 代码
-   * @param result 传递给 JavaScript 代码的参数
-   * @returns 执行结果
+   * 执行 JS 代码。
+   * @param {string} jsStr 要执行的 JS 代码
+   * @param {any} [result] 传递给 JS 代码的参数
+   * @returns {Promise<any>} 执行结果
    */
   public async evalJS(jsStr: string, result: any = null): Promise<any> {
     const context = await isolate.createContext();
     const bindings = context.global;
-    // await bindings.set("java", new ivm.Reference(this)); // 如果需要，可以暴露一些对象给 JS 环境
     await bindings.set('key', this.key);
     await bindings.set('page', this.page);
     await bindings.set('result', result);

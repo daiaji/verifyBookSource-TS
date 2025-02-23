@@ -1,9 +1,10 @@
 import { Elements } from '../javascript/jsoup/Elements';
 import { Element } from '../javascript/jsoup/Element';
-import { Jsoup } from '../javascript/jsoup/Jsoup';
+import { Jsoup, $ } from '../javascript/jsoup/Jsoup'; // 导入 $
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
 import os from 'os';
+import { ensureElements, handleError, isElement, joinNonEmpty, safeString, getAttributes, getTextContents } from './utils';
 
 /**
  * 默认规则执行器。
@@ -22,9 +23,10 @@ export class DefaultEvaluator extends RuleEvaluator {
   }
 
   override getStrings(context: AnalyzerManager, value: any): string[] | null {
-    if (!value) return [];
-    const doc = value as Elements;
-    const elements = new Elements(doc);
+    const elements = ensureElements(value);
+    if (!elements) {
+      return [];
+    }
 
     for (const _eval of this.evals) {
       if (_eval instanceof Last) {
@@ -49,13 +51,15 @@ export class DefaultEvaluator extends RuleEvaluator {
   }
 
   override getElements(context: AnalyzerManager, value: any): any[] {
-    if (!value) return [];
-    const doc = value as Elements;
-    const elements = new Elements(doc);
+    const elements = ensureElements(value);
+    if (!elements) {
+      return [];
+    }
 
     for (const _eval of this.evals) {
       if (_eval instanceof Last) {
-        throw new Error('不应存在获取文本规则');
+        // 如果是 Last，不应该调用 getElements
+        return handleError('不应存在获取文本规则', { value, _eval }, []) as any[];
       }
       const els = new Elements();
 
@@ -63,16 +67,14 @@ export class DefaultEvaluator extends RuleEvaluator {
         const result = _eval.getElements(context, element);
         els.push(...result);
       }
-
       elements.clear();
       elements.addAll(els);
     }
-
     return elements;
   }
 
-  toString(): string {
-    return this.evals.map((_eval) => _eval.toString()).join('@');
+  override toString(): string {
+    return joinNonEmpty('@', this.evals.map(_eval => _eval.toString()));
   }
 
   /**
@@ -104,7 +106,7 @@ export class DefaultEvaluator extends RuleEvaluator {
       return context.isJSON ? this.jsonPathEvaluator.getElement(context, value) : this.defaultEvaluator.getElement(context, value);
     }
 
-    toString(): string {
+    override toString(): string {
       return this.defaultEvaluator.toString();
     }
   };
@@ -120,47 +122,23 @@ export class DefaultEvaluator extends RuleEvaluator {
       this._eval = _eval;
     }
 
-    private parse(doc: any): any {
-      if (doc instanceof Elements || doc instanceof Element) {
-        return doc;
-      }
-      //  这里暂时移除 JXNode 的判断
-      // if (doc instanceof JXNode) {
-      //     return doc.isElement() ? doc.asElement() : Jsoup.parse(doc.toString());
-      // }
-
-      // try {   这里暂时移除xml判断
-      //     if (doc.toString().startsWith("<?xml", 0)) {
-      //         return Jsoup.parse(doc.toString(), Jsoup.parser.xmlParser());
-      //     }
-      // } catch (e) {
-      //     logger.error("尝试解析为 XML 失败", {error:e}) // 记录异常
-      // }
-
-      return Jsoup.parse(doc.toString());
-    }
-
     override getStrings(context: AnalyzerManager, value: any): string[] | null {
-      if (!value) return null;
-      return this._eval.getStrings(context, this.parse(value));
+      return this._eval.getStrings(context, ensureElements(value));
     }
 
     override getElements(context: AnalyzerManager, value: any): any[] {
-      if (!value) return [];
-      return this._eval.getElements(context, this.parse(value));
+      return this._eval.getElements(context, ensureElements(value));
     }
 
     override getString0(context: AnalyzerManager, value: any): string {
-      if (!value) return '';
-      return this._eval.getString0(context, this.parse(value));
+      return this._eval.getString0(context, ensureElements(value));
     }
 
     override getElement(context: AnalyzerManager, value: any): any {
-      if (!value) return null;
-      return this._eval.getElement(context, this.parse(value));
+      return this._eval.getElement(context, ensureElements(value));
     }
 
-    toString(): string {
+    override toString(): string {
       return this._eval.toString();
     }
   };
@@ -177,14 +155,20 @@ export class DefaultEvaluator extends RuleEvaluator {
     }
 
     override getElements(context: AnalyzerManager, value: any): any[] {
-      const element = value as Elements;
-      const result = element.children();
+      if (!isElement(value)) {
+        return [];
+      }
+      const element = value as Element;
+      // 使用 $ 获取子元素
+      const result = new Elements($(element.element).children().get());
       return this.index ? this.index.getElements(context, result) : result;
     }
 
     override toString(): string {
-      // 添加空值检查
-      return `${this.explicit ? 'children' : ''}${this.index ? this.index.toString() : ''}`;
+      return joinNonEmpty('', [
+        this.explicit ? 'children' : undefined,
+        this.index ? this.index.toString() : undefined,
+      ]);
     }
   };
 
@@ -312,7 +296,7 @@ export class DefaultEvaluator extends RuleEvaluator {
       }
     }
 
-    toString(): string {
+    override toString(): string {
       const result: string[] = [];
       if (this.indexDefault.length > 0) {
         result.push(this.exclude ? '!' : '.');
@@ -404,7 +388,6 @@ export abstract class Select extends RuleEvaluator {
       return value.select(this.name);
     }
 
-    // 使用模板字符串简化
     override toString(): string {
       return `tag.${this.name}${this.index ? this.index.toString() : ''}`;
     }
@@ -425,7 +408,6 @@ export abstract class Select extends RuleEvaluator {
       return value.select(`#${this.name}`);
     }
 
-    // 使用模板字符串简化
     override toString(): string {
       return `id.${this.name}${this.index ? this.index.toString() : ''}`;
     }
@@ -447,7 +429,6 @@ export abstract class Select extends RuleEvaluator {
       return value.select(`:contains(${this.searchText})`);
     }
 
-    // 使用模板字符串简化
     override toString(): string {
       return `text.${this.searchText}${this.index ? this.index.toString() : ''}`;
     }
@@ -470,9 +451,12 @@ export abstract class Select extends RuleEvaluator {
       return value.select(this.query);
     }
 
-    // 使用模板字符串简化
     override toString(): string {
-      return `${this.prefix ? '@css:' : ''}${this.query}${this.index ? this.index.toString() : ''}`;
+      return joinNonEmpty('', [
+        this.prefix ? '@css:' : undefined,
+        this.query,
+        this.index ? this.index.toString() : undefined
+      ]);
     }
   };
 }
@@ -493,21 +477,12 @@ export abstract class Last extends RuleEvaluator {
    * 获取文本节点内容。
    */
   static Text = new (class extends Last {
-    getStrings(context: AnalyzerManager, value: any): string[] {
-      const result: string[] = [];
-      const elements = value as Elements;
-
-      for (let i = 0; i < elements.length; i++) {
-        const text = elements[i].text();
-        if (text) {
-          result.push(text);
-        }
-      }
-
-      return result;
+    override getStrings(context: AnalyzerManager, value: any): string[] {
+      const elements = ensureElements(value);
+      return getTextContents(elements);
     }
 
-    toString(): string {
+    override toString(): string {
       return 'text';
     }
   })();
@@ -516,20 +491,23 @@ export abstract class Last extends RuleEvaluator {
    * 获取文本节点内容（包括换行符）。
    */
   static TextNodes = new (class extends Last {
-    getStrings(context: AnalyzerManager, value: any): string[] {
+    override getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
-      const elements = value as Elements;
+      const elements = ensureElements(value);
+      if (!elements) {
+        return [];
+      }
 
       for (let i = 0; i < elements.length; i++) {
         const contentEs = elements[i].textNodes();
-        const textContent: string[] = []; // 使用临时数组
+        const textContent: string[] = [];
 
         for (let a = 0; a < contentEs.length; a++) {
           const item = contentEs[a];
           const text = item.text().trim();
 
           if (text) {
-            if (a > 0) textContent.push(os.EOL); // 使用 os.EOL
+            if (a > 0) textContent.push(os.EOL);
             textContent.push(text);
           }
         }
@@ -542,7 +520,7 @@ export abstract class Last extends RuleEvaluator {
       return result;
     }
 
-    toString(): string {
+    override toString(): string {
       return 'textNodes';
     }
   })();
@@ -551,10 +529,12 @@ export abstract class Last extends RuleEvaluator {
    * 获取自身文本内容（不包括子元素）。
    */
   static OwnText = new (class extends Last {
-    getStrings(context: AnalyzerManager, value: any): string[] {
+    override getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
-      const elements = value as Elements;
-
+      const elements = ensureElements(value);
+      if (!elements) {
+        return [];
+      }
       for (let i = 0; i < elements.length; i++) {
         const text = elements[i].ownText();
         if (text) {
@@ -565,7 +545,7 @@ export abstract class Last extends RuleEvaluator {
       return result;
     }
 
-    toString(): string {
+    override toString(): string {
       return 'ownText';
     }
   })();
@@ -574,9 +554,12 @@ export abstract class Last extends RuleEvaluator {
    * 获取 HTML 内容（不包括 script 和 style 标签）。
    */
   static Html = new (class extends Last {
-    getStrings(context: AnalyzerManager, value: any): string[] {
+    override getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
-      const elements = value as Elements;
+      const elements = ensureElements(value);
+      if (!elements) {
+        return [];
+      }
 
       elements.select('script, style').remove(); // 移除 script 和 style 标签
       const html = elements.outerHtml();
@@ -588,7 +571,7 @@ export abstract class Last extends RuleEvaluator {
       return result;
     }
 
-    toString(): string {
+    override toString(): string {
       return 'html';
     }
   })();
@@ -597,15 +580,15 @@ export abstract class Last extends RuleEvaluator {
    * 获取所有 HTML 内容。
    */
   static All = new (class extends Last {
-    getStrings(context: AnalyzerManager, value: any): string[] {
-      const result: string[] = [];
-      const elements = value as Elements;
-      // 这里不移除 script, style
-      result.push(elements.outerHtml());
-      return result;
+    override getStrings(context: AnalyzerManager, value: any): string[] {
+      const elements = ensureElements(value);
+      if (!elements) {
+        return [];
+      }
+      return [elements.outerHtml()];
     }
 
-    toString(): string {
+    override toString(): string {
       return 'all';
     }
   })();
@@ -621,20 +604,12 @@ export abstract class Last extends RuleEvaluator {
       this.name = name;
     }
 
-    getStrings(context: AnalyzerManager, value: any): string[] {
-      const result: string[] = [];
-      const elements = value as Elements;
-
-      for (let i = 0; i < elements.length; i++) {
-        const url = elements[i].attr(this.name);
-        if (!url || result.includes(url)) continue;
-        result.push(url);
-      }
-
-      return result;
+    override getStrings(context: AnalyzerManager, value: any): string[] {
+      const elements = ensureElements(value);
+      return getAttributes(elements, this.name);
     }
 
-    toString(): string {
+    override toString(): string {
       return this.name;
     }
   };

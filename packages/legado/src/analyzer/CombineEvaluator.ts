@@ -1,5 +1,6 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
+import { joinNonEmpty } from './utils'; // 导入 joinNonEmpty
 
 /**
  * 组合规则执行器。
@@ -18,7 +19,7 @@ export class CombineEvaluator {
       this.evals = evals;
     }
 
-    getStrings(context: AnalyzerManager, value: any): string[] {
+    override getStrings(context: AnalyzerManager, value: any): string[] {
       const result: string[] = [];
       for (const _eval of this.evals) {
         const strings = _eval.getStrings(context, value);
@@ -29,7 +30,7 @@ export class CombineEvaluator {
       return result;
     }
 
-    getElements(context: AnalyzerManager, value: any): any[] {
+    override getElements(context: AnalyzerManager, value: any): any[] {
       const result: any[] = [];
       for (const _eval of this.evals) {
         const elements = _eval.getElements(context, value);
@@ -38,13 +39,13 @@ export class CombineEvaluator {
       return result;
     }
 
-    getElement(context: AnalyzerManager, value: any): any {
+    override getElement(context: AnalyzerManager, value: any): any {
       // AND 组合通常返回多个元素，这里返回数组
       return this.getElements(context, value);
     }
 
-    toString(): string {
-      return this.evals.map((_eval) => _eval.toString()).join('&&');
+    override toString(): string {
+      return joinNonEmpty('&&', this.evals.map((_eval) => _eval.toString()));
     }
   };
 
@@ -60,7 +61,7 @@ export class CombineEvaluator {
       this.evals = evals;
     }
 
-    getStrings(context: AnalyzerManager, value: any): string[] | null {
+    override getStrings(context: AnalyzerManager, value: any): string[] | null {
       for (const _eval of this.evals) {
         const result = _eval.getStrings(context, value);
         if (result && result.length > 0) {
@@ -70,7 +71,7 @@ export class CombineEvaluator {
       return null;
     }
 
-    getElements(context: AnalyzerManager, value: any): any[] {
+    override getElements(context: AnalyzerManager, value: any): any[] {
       for (const _eval of this.evals) {
         const result = _eval.getElements(context, value);
         if (result.length > 0) {
@@ -80,13 +81,13 @@ export class CombineEvaluator {
       return [];
     }
 
-    getElement(context: AnalyzerManager, value: any): any {
+    override getElement(context: AnalyzerManager, value: any): any {
       // OR 组合通常返回第一个匹配的元素，这里返回数组
       return this.getElements(context, value);
     }
 
-    toString(): string {
-      return this.evals.map((_eval) => _eval.toString()).join('||');
+    override toString(): string {
+      return joinNonEmpty('||', this.evals.map((_eval) => _eval.toString()));
     }
   };
 
@@ -102,7 +103,7 @@ export class CombineEvaluator {
       this.evals = evals;
     }
 
-    getStrings(context: AnalyzerManager, value: any): string[] {
+    override getStrings(context: AnalyzerManager, value: any): string[] {
       const arrays: string[][] = [];
       for (const _eval of this.evals) {
         const strings = _eval.getStrings(context, value);
@@ -124,7 +125,7 @@ export class CombineEvaluator {
       return result;
     }
 
-    getElements(context: AnalyzerManager, value: any): any[] {
+    override getElements(context: AnalyzerManager, value: any): any[] {
       const arrays: any[][] = [];
       for (const _eval of this.evals) {
         arrays.push(_eval.getElements(context, value));
@@ -143,13 +144,13 @@ export class CombineEvaluator {
       return result;
     }
 
-    getElement(context: AnalyzerManager, value: any): any {
-      // 转置 组合通常返回多个元素，这里返回数组
+    override getElement(context: AnalyzerManager, value: any): any {
+      // 转置组合通常返回多个元素，这里返回数组
       return this.getElements(context, value);
     }
 
-    toString(): string {
-      return this.evals.map((_eval) => _eval.toString()).join('%%');
+    override toString(): string {
+      return joinNonEmpty('%%', this.evals.map((_eval) => _eval.toString()));
     }
   };
 }

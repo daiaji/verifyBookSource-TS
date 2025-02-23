@@ -1,5 +1,5 @@
 // rule-utils/src/config.ts
-import { ContentType, Rule } from '../type';
+import { ContentType, Rule } from './type';
 
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.80 Safari/537.36 Edg/98.0.1108.50';

@@ -26,9 +26,9 @@
   ],
   "scripts": {
     "start": "tsx start.ts",
-    "build:legado": "pnpm --filter=@book-source-kit/legado build",
-    "build:rule-utils": "pnpm --filter=@book-source-kit/rule-utils build",
-    "build:utils": "pnpm --filter=@book-source-kit/utils build",
+    "build:legado": "pnpm --filter=@any-reader/legado build",
+    "build:rule-utils": "pnpm --filter=@any-reader/rule-utils build",
+    "build:utils": "pnpm --filter=@any-reader/utils build",
     "build": "npm-run-all2 build:legado build:rule-utils build:utils",
     "clean": "rimraf packages/*/dist --glob",
     "lint": "eslint . --ext .ts --fix --cache",

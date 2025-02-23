@@ -1,6 +1,7 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
 import { isolate } from '../javascript/vm'; // 导入已定义的 isolate
+import { joinNonEmpty, safeString } from './utils';
 
 /**
  * 模拟 RhinoScriptEngine 的类。
@@ -60,7 +61,7 @@ export abstract class JsEvaluator extends RuleEvaluator {
      */
     override getString(context: AnalyzerManager, value?: any): string {
       const result = this.eval(context, value);
-      return typeof result === 'string' ? result : String(result);
+      return safeString(result); // 使用 safeString
     }
 
     /**
@@ -72,9 +73,9 @@ export abstract class JsEvaluator extends RuleEvaluator {
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
       const result = this.eval(context, value);
       if (Array.isArray(result)) {
-        return result.map(item => typeof item === 'string' ? item : String(item));
+        return result.map(item => safeString(item)); // 使用 safeString
       }
-      return result ? [String(result)] : null;
+      return result ? [safeString(result)] : null; // 使用 safeString
     }
 
     /**
@@ -125,14 +126,13 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 规则的字符串表示形式
      */
     override toString(): string {
-      switch (this.prefix) {
-        case '<js>':
-          return `<js>${this.script}</js>`;
-        case '@js:':
-          return `@js:${this.script}`;
-        default:
-          return this.script.toString();
-      }
+      // 使用 joinNonEmpty
+      return joinNonEmpty('', [
+        this.prefix === '<js>' ? '<js>' : undefined,
+        this.prefix === '@js:' ? '@js:' : undefined,
+        this.script.toString(),
+        this.prefix === '<js>' ? '</js>' : undefined,
+      ]);
     }
   };
 

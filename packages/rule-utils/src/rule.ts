@@ -3,7 +3,7 @@ import { decodeRule } from './compress'; // 更正拼写
 import { NetworkManager, logger } from '@any-reader/utils';
 // import { isEsoStr, isEsoObj } from './utils'; // 移动到 utils.ts
 import { DEFAULT_RULE } from './config'; // 导入配置
-import { ContentType, Rule } from '../type'; // 从 type.d.ts 导入
+import { ContentType, Rule } from './type'; // 从 type.d.ts 导入
 import { fetchRulesFromUrl, isEsoObj, isEsoStr } from './utils';
 
 export function createRule(rule: Partial<Rule>): Rule {
