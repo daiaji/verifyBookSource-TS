@@ -16,6 +16,7 @@ async function processRule(rule: LegadoRule, searchTerm: string, limit: pLimit.L
             let searchResults = [];
             try {
                 searchResults = await analyzer.search(searchTerm);
+                logger.info(JSON.stringify(searchResults, null, 2)); // 打印搜索结果
             } catch (searchError: any) {
                 logger.warn(`[${rule.bookSourceName}] 搜索失败: ${searchError.message}`, { stack: searchError.stack });
                 return; // 搜索失败，跳过此规则
@@ -25,41 +26,7 @@ async function processRule(rule: LegadoRule, searchTerm: string, limit: pLimit.L
                 logger.warn(`[${rule.bookSourceName}] 未找到搜索结果`);
                 return; // 没有搜索结果，跳过此规则
             }
-
-            // 2. 获取第一本书的详情 (包括 tocUrl)
-            const firstBookUrl = searchResults[0].url;
-            let bookInfo: BookInfo;
-            try {
-                bookInfo = await analyzer.getBookInfo(firstBookUrl);
-            } catch (bookInfoError: any) {
-                logger.error(`[${rule.bookSourceName}] 获取书籍详情失败 (URL: ${firstBookUrl}): ${bookInfoError.message}`, { stack: bookInfoError.stack });
-                return; // 获取详情失败，跳过此规则
-            }
-
-            // 3. 获取章节列表
-            let chapters = [];
-            try {
-                chapters = await analyzer.getChapter(bookInfo.tocUrl);
-            } catch (chapterError: any) {
-                logger.error(`[${rule.bookSourceName}] 获取章节列表失败 (URL: ${bookInfo.tocUrl}): ${chapterError.message}`, { stack: chapterError.stack });
-                return; // 获取章节列表失败，跳过此规则
-            }
-
-            logger.info(`[${rule.bookSourceName}] 章节数量: ${chapters.length}`);
-
-            // 4. 获取第一章内容
-            if (chapters.length > 0) {
-                const firstChapterUrl = chapters[0].url;
-                try {
-                    const content = await analyzer.getContent(firstChapterUrl);
-                    logger.info(`[${rule.bookSourceName}] 获取到章节内容, 长度: ${content.length > 0 ? content[0].length : 0}`);
-                    success = true; // 如果能获取到内容，则认为成功
-                } catch (contentError: any) {
-                    logger.error(`[${rule.bookSourceName}] 获取章节内容失败 (URL: ${firstChapterUrl}): ${contentError.message}`, { stack: contentError.stack });
-                }
-            } else {
-                logger.warn(`[${rule.bookSourceName}] 未找到章节`);
-            }
+		success = true;
 
         } catch (error: any) {
             logger.error(`[${rule.bookSourceName}] 处理规则时发生未知错误: ${error.message}`, { stack: error.stack });

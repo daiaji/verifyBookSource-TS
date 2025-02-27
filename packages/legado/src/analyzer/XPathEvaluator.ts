@@ -2,7 +2,6 @@ import xpath from 'xpath';
 import { DOMParser, MIME_TYPE, Document } from '@xmldom/xmldom'; // 导入 Document
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
-import { logger } from '@any-reader/utils';
 import { handleError, parseSafely, safeString } from './utils';
 
 /**
@@ -53,7 +52,7 @@ class JXNode {
       return node.map((e) => e.toString());
     } catch (e: any) {
       // 使用 handleError
-      return handleError('XPath 执行失败:', { rule, error: e, stack: e.stack }, []);
+      return handleError('XPath 执行失败:', { rule, error: e }, []); //传入 error
     }
   }
 }
@@ -72,7 +71,7 @@ export class XPathEvaluator extends RuleEvaluator {
 
   override getElements(context: AnalyzerManager, value: any): any[] {
     // 使用 handleError
-    return value ? value.sel(this.xpath) : handleError('XPath 获取元素失败: value 为空', { xpath: this.xpath }, []);
+    return value ? value.sel(this.xpath) : handleError('XPath 获取元素失败: value 为空', { xpath: this.xpath, error: new Error("value 为空") }, []); //传入 error
   }
 
   override getElement(context: AnalyzerManager, value: any): any {

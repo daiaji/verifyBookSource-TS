@@ -1,7 +1,7 @@
 import { AnalyzerManager } from './AnalyzerManager';
 import { RuleEvaluator } from './common';
 import { isolate } from '../javascript/vm'; // 导入已定义的 isolate
-import { joinNonEmpty, safeString } from './utils';
+import { joinNonEmpty, safeString, handleError } from './utils';
 
 /**
  * JavaScript 执行器抽象基类。
@@ -38,8 +38,12 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 执行结果（字符串）
      */
     override getString(context: AnalyzerManager, value?: any): string {
-      const result = this.eval(context, value);
-      return safeString(result); // 使用 safeString
+      try {
+        const result = this.eval(context, value);
+        return safeString(result); // 使用 safeString
+      } catch (e: any) {
+        return handleError('JsEvaluator.getString 执行失败:', { script: this.script.toString(), error: e }, '');
+      }
     }
 
     /**
@@ -49,11 +53,15 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 执行结果（字符串数组或 null）
      */
     override getStrings(context: AnalyzerManager, value?: any): string[] | null {
-      const result = this.eval(context, value);
-      if (Array.isArray(result)) {
-        return result.map(item => safeString(item)); // 使用 safeString
+      try {
+        const result = this.eval(context, value);
+        if (Array.isArray(result)) {
+          return result.map(item => safeString(item)); // 使用 safeString
+        }
+        return result ? [safeString(result)] : null; // 使用 safeString
+      } catch (e: any) {
+        return handleError('JsEvaluator.getStrings 执行失败:', { script: this.script.toString(), error: e }, null);
       }
-      return result ? [safeString(result)] : null; // 使用 safeString
     }
 
     /**
@@ -63,7 +71,11 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 执行结果
      */
     override getElement(context: AnalyzerManager, value?: any): any {
-      return this.eval(context, value); // 类型已经在 eval 中处理
+      try {
+        return this.eval(context, value); // 类型已经在 eval 中处理
+      } catch (e: any) {
+        return handleError('JsEvaluator.getElement 执行失败:', { script: this.script.toString(), error: e }, null);
+      }
     }
 
     /**
@@ -73,8 +85,12 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 执行结果（元素数组）
      */
     override getElements(context: AnalyzerManager, value?: any): any[] {
-      const script = this.script.evalElements(context, value);
-      return context.evalJS(script, value); // 类型已经在 evalJS 中处理
+      try {
+        const script = this.script.evalElements(context, value);
+        return context.evalJS(script, value); // 类型已经在 evalJS 中处理
+      } catch (e: any) {
+        return handleError('JsEvaluator.getElements 执行失败:', { script: this.script.toString(), error: e }, []);
+      }
     }
 
     /**
@@ -84,8 +100,12 @@ export abstract class JsEvaluator extends RuleEvaluator {
      * @returns 执行结果
      */
     override eval(context: AnalyzerManager, value?: any): any {
-      const script = this.script.eval(context, value);
-      return context.evalJS(script, value);
+      try {
+        const script = this.script.eval(context, value);
+        return context.evalJS(script, value);
+      } catch (e: any) {
+        return handleError('JsEvaluator.eval 执行失败:', { script: this.script.toString(), error: e }, null);
+      }
     }
 
     /**

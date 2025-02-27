@@ -1,69 +1,47 @@
 [
   {
     "bookSourceComment": "",
-    "bookSourceGroup": "",
-    "bookSourceName": "🎉 求小说网",
+    "bookSourceGroup": "Namo",
+    "bookSourceName": "🌟 豆腐阅读",
     "bookSourceType": 0,
-    "bookSourceUrl": "https://www.qiuxiaoshuo.org/",
-    "bookUrlPattern": "https://www.qiuxiaoshuo.org/book/\\d+.html",
-    "customOrder": 1222,
+    "bookSourceUrl": "http://api.doufu.me",
+    "customOrder": 356,
     "enabled": true,
     "enabledCookieJar": false,
     "enabledExplore": true,
-    "exploreUrl": "玄幻小说::/xuanhuanxiaoshuo/{{page}}.htm\n奇幻小说::/qihuanxiaoshuo/{{page}}.htm\n修真小说::/xiuzhenxiaoshuo/{{page}}.htm\n都市小说::/dushixiaoshuo/{{page}}.htm\n言情小说::/yanqingxiaoshuo/{{page}}.htm\n历史小说::/lishixiaoshuo/{{page}}.htm\n同人小说::/tongrenxiaoshuo/{{page}}.htm\n武侠小说::/wuxiaxiaoshuo/{{page}}.htm\n科幻小说::/kehuanxiaoshuo/{{page}}.htm\n游戏小说::/youxixiaoshuo/{{page}}.htm\n军事小说::/junshixiaoshuo/{{page}}.htm\n竞技小说::/jingjixiaoshuo/{{page}}.htm\n灵异小说::/lingyixiaoshuo/{{page}}.htm\n商战小说::/shangzhanxiaoshuo/{{page}}.htm\n校园小说::/xiaoyuanxiaoshuo/{{page}}.htm\n官场小说::/guanchangxiaoshuo/{{page}}.htm\n职场小说::/zhichangxiaoshuo/{{page}}.htm\n其他小说::/qitaxiaoshuo/{{page}}.htm",
-    "header": "{\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.73 Safari/537.36\"\n}",
-    "lastUpdateTime": 1632155952159,
-    "loginUrl": "{\n  \"url\": \"\"\n}",
-    "respondTime": 21953,
+    "header": "{\n  \"Cookie\": \"wh=1080*2120; uid=7383010; os=Android-10; av=7.1.0; ch=tencent; md=Mi 10; cskey=90b881a0908991; skey=5f00e564e3ede8.21979201; aid=3; xx=0\"\n}",
+    "lastUpdateTime": 1689836420697,
+    "loginUrl": "http://api.doufu.me/member/user_login",
+    "respondTime": 6262,
     "ruleBookInfo": {
-      "author": "h1@small@text",
-      "coverUrl": "class.img-thumbnail@src",
-      "init": "",
-      "intro": "id.shot@text",
-      "kind": "class.list-group.0@tag.li.3@text&&\nclass.list-group.0@tag.li.2@text##写作进度：|更新时间：",
-      "lastChapter": "class.list-group.0@tag.li.4@a@text##免费章节 |正文卷 |正文 |VIP章节 ",
-      "name": "h1@text##作者.*",
-      "tocUrl": "text.开始阅读@href",
-      "wordCount": ""
+      "author": "$.data.topic.author",
+      "coverUrl": "$.images[0].path",
+      "kind": "$.tags[0].name&&$.tags[2].name&&$.tags[1].name&&$.tags[3].name",
+      "lastChapter": "",
+      "name": "$.data.topic.title",
+      "tocUrl": "http://api.doufu.me/index.php/novel/chapter_list?novel_id={$.data.topic.id}"
     },
     "ruleContent": {
-      "content": "id.txtContent@html",
-      "imageStyle": "0",
-      "nextContentUrl": "",
-      "sourceRegex": "",
-      "webJs": ""
+      "content": "$.data.detail.des"
     },
-    "ruleExplore": {
-      "author": "class.col-xs-2.0@text",
-      "bookList": "id.novel-list@li!0",
-      "bookUrl": "tag.a.0@href",
-      "coverUrl": "",
-      "intro": "",
-      "kind": "class.time@text",
-      "lastChapter": "tag.a.1@text",
-      "name": "class.col-xs-3@tag.a.0@text",
-      "wordCount": ""
-    },
+    "ruleExplore": {},
     "ruleSearch": {
-      "author": "class.col-xs-2.0@text",
-      "bookList": "class.panel-body@li!0",
-      "bookUrl": "class.col-xs-3@a@href",
-      "coverUrl": "",
-      "intro": "",
-      "kind": "class.col-xs-1@text&&\nclass.time@text",
-      "lastChapter": "class.col-xs-4@a@text##免费章节 |正文卷 |正文 |VIP章节 ",
-      "name": "class.col-xs-3@a@text",
-      "wordCount": ""
+      "author": "$.author",
+      "bookList": "$.data[*]",
+      "bookUrl": "http://api.doufu.me/topic/novel?topic_id={$.id}",
+      "coverUrl": "$.images[0].path",
+      "intro": "$.des",
+      "kind": "$.tags[0].name&&$.tags[2].name&&$.tags[1].name&&$.tags[3].name",
+      "name": "$.title"
     },
     "ruleToc": {
-      "chapterList": "@css:#chapters-list a",
-      "chapterName": "text##(正文)?(\\s+|_)|[\\(（【].*[求更谢乐发推].*[】）\\)]",
-      "chapterUrl": "href",
-      "isVip": "",
-      "nextTocUrl": "",
-      "updateTime": ""
+      "chapterList": "$.data.list",
+      "chapterName": "$.title",
+      "chapterUrl": "http://api.doufu.me/index.php/post/view/{$.id}?with_ids=1&type=read",
+      "isVip": "$.vip",
+      "updateTime": "$.add_time"
     },
-    "searchUrl": "https://www.qiuxiaoshuo.org/search.htm?keyword={{key}}&pn={{page}}",
+    "searchUrl": "http://api.doufu.me/search/content?keyword={{key}}&start=0&rows=20&types=18&order=&is_finished=&vip=",
     "weight": 0
   }
 ]

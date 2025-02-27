@@ -58,7 +58,7 @@ export class LegadoRuleManager implements RuleManager {
 
         const resp = await analyzeUrl.getStrResponseAwait();
         if (!resp.body) {
-            logger.warn('搜索响应为空.');
+            logger.warn('搜索响应为空.', { fieldName: 'searchUrl' });
             return [];
         }
         logger.silly(`搜索页响应体: ${resp.body}`);
@@ -103,7 +103,7 @@ export class LegadoRuleManager implements RuleManager {
         logger.debug(`调用, bookUrl: ${bookUrl}`);
 
         if (!this.rule.ruleBookInfo) {
-            logger.warn('规则检查: ruleBookInfo 为空，返回空对象。');
+            logger.warn('规则检查: ruleBookInfo 为空，返回空对象。', { fieldName: 'ruleBookInfo' });
             return { name: '', author: '', cover: '', description: '', tocUrl: '', intro: '' };
         }
 
@@ -112,7 +112,7 @@ export class LegadoRuleManager implements RuleManager {
 
         const resp = await analyzeUrl.getStrResponseAwait();
         if (!resp.body) {
-            logger.warn('详情页响应为空.');
+            logger.warn('详情页响应为空.', { fieldName: 'bookUrl' });
             return { name: '', author: '', cover: '', description: '', tocUrl: '', intro: '' };
         }
         logger.silly(`详情页响应体: ${resp.body}`);
@@ -145,7 +145,7 @@ export class LegadoRuleManager implements RuleManager {
         logger.debug(`调用, tocUrl: ${tocUrl}`);
 
         if (!this.rule.ruleToc || !this.rule.ruleToc.chapterList) {
-            logger.warn('规则检查: ruleToc 或 chapterList 为空，返回空数组。');
+            logger.warn('规则检查: ruleToc 或 chapterList 为空，返回空数组。', { fieldName: 'ruleToc.chapterList' });
             return [];
         }
 
@@ -154,7 +154,7 @@ export class LegadoRuleManager implements RuleManager {
 
         const resp = await analyzeUrl.getStrResponseAwait();
         if (!resp.body) {
-            logger.warn('章节响应为空.');
+            logger.warn('章节响应为空.', { fieldName: 'tocUrl' });
             return [];
         }
         logger.silly(`目录页响应体: ${resp.body}`);
@@ -187,7 +187,7 @@ export class LegadoRuleManager implements RuleManager {
     async getContent(chapterUrl: string): Promise<string[]> {
         logger.debug(`调用, chapterUrl: ${chapterUrl}`);
         if (!this.rule.ruleContent || !this.rule.ruleContent.content) {
-            logger.warn('规则检查: ruleContent 或 content 为空，返回空数组。');
+            logger.warn('规则检查: ruleContent 或 content 为空，返回空数组。', { fieldName: 'ruleContent.content' });
             return [];
         }
 
@@ -196,7 +196,7 @@ export class LegadoRuleManager implements RuleManager {
         const resp = await analyzeUrl.getStrResponseAwait();
 
         if (!resp.body) {
-            logger.warn('内容响应为空.');
+            logger.warn('内容响应为空.', { fieldName: 'chapterUrl' });
             return [];
         }
         logger.silly(`正文页响应体: ${resp.body}`);

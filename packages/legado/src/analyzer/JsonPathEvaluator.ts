@@ -41,7 +41,7 @@ class ReadContext {
       return rows;
     } catch (e: any) {
       // 使用 handleError
-      return handleError('JSONPath 执行失败:', { jsonPath, error: e, stack: e.stack }, []);
+      return handleError('JSONPath 执行失败:', { jsonPath, error: e }, []); // 补上传入 error
     }
   }
 }
@@ -75,7 +75,7 @@ export class JsonPathEvaluator extends RuleEvaluator {
       }
     } catch (e: any) {
       // 使用 handleError
-      handleError('JsonPath 解析失败:', { jsonpath: this.jsonpath, error: e, stack: e.stack }, []);
+      handleError('JsonPath 解析失败:', { jsonpath: this.jsonpath, error: e }, []); //补上传入 error
     }
     return result;
   }
@@ -83,13 +83,13 @@ export class JsonPathEvaluator extends RuleEvaluator {
   override getElements(_context: AnalyzerManager, value: any): any[] {
     const ctx = value as ReadContext;
     // 使用 handleError
-    return ctx ? ctx.read(this.jsonpath) : handleError('JsonPath 获取元素失败: ctx 为空', { jsonpath: this.jsonpath }, []);
+    return ctx ? ctx.read(this.jsonpath) : handleError('JsonPath 获取元素失败: ctx 为空', { jsonpath: this.jsonpath, error: new Error('ctx 为空') }, []); //补上传入 error
   }
 
   override getElement(_context: AnalyzerManager, value: any): any {
     const ctx = value as ReadContext;
     // 使用 handleError
-    return ctx ? ctx.read(this.jsonpath) : handleError('JsonPath 获取单个元素失败: ctx 为空', { jsonpath: this.jsonpath }, null);
+    return ctx ? ctx.read(this.jsonpath) : handleError('JsonPath 获取单个元素失败: ctx 为空', { jsonpath: this.jsonpath, error: new Error('ctx 为空') }, null); //补上传入 error
   }
 
   override toString(): string {

@@ -163,7 +163,7 @@ export class AnalyzeUrl {
       const jsResult = await this.evalJS(jsCode, context);
       return jsResult ? String(jsResult) : '';
     } catch (e: any) {
-      logger.error('执行 JS 失败:', { js: jsCode, error: e, stack: e.stack });
+      logger.error('执行 JS 失败:', { js: jsCode, error: e, stack: e.stack, fieldName: 'executeJs', ruleContent: jsCode });
       return '';
     }
   }
@@ -194,7 +194,7 @@ export class AnalyzeUrl {
         const jsEval = await this.evalJS(jsCode);
         return jsEval ? String(jsEval) : '';
       } catch (e: any) {
-        logger.error('执行内嵌 JS 失败:', { js: jsCode, error: e, stack: e.stack });
+        logger.error('执行内嵌 JS 失败:', { js: jsCode, error: e, stack: e.stack, fieldName: 'innerJs', ruleContent: jsCode });
         return '';
       }
     });
@@ -280,7 +280,7 @@ export class AnalyzeUrl {
         const evalResult = await this.evalJS(option.js, this.url);
         this.url = evalResult ? String(evalResult) : this.url;
       } catch (e: any) {
-        logger.error('解析 URL 参数时执行 JS 失败:', { js: option.js, error: e, stack: e.stack });
+        logger.error('解析 URL 参数时执行 JS 失败:', { js: option.js, error: e, stack: e.stack, fieldName: 'urlOptions.js', ruleContent: option.js });
       }
     }
   }
@@ -381,7 +381,11 @@ export class AnalyzeUrl {
    * @private
    */
   private decodeResponseBody(response: NetworkResponse<any>): string {
-    const ct = contentType.parse(response.headers['content-type'] || '');
+    let contentTypeHeader = response.headers['content-type'] || '';
+    // 移除末尾多余的分号
+    contentTypeHeader = contentTypeHeader.trim().replace(/;+$/, '');
+
+    const ct = contentType.parse(contentTypeHeader);
     let encoding = ct.parameters.charset || this.charset;
     if (!encoding) encoding = chardet.detect(response.data);
     let str = iconv.decode(response.data, encoding || 'utf8');

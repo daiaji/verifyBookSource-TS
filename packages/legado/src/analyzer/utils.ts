@@ -86,23 +86,23 @@ export function handleError<T>(errorMessage: string, context?: any, returnValue?
  * @returns Elements 对象，如果输入无效则返回 null
  */
 export function ensureElements(doc: any): Elements | null {
-    if (doc instanceof Elements) {
-        return doc;
-    }
-    if (doc instanceof Element) {
-        return new Elements(doc);
-    }
-    if (typeof doc === 'string') {
-        const parsed = parseSafely(
-            () => Jsoup.parse(doc),
-            'HTML 解析失败 (ensureElements):',
-            { doc }
-        );
-        return parsed instanceof Elements ? parsed : (parsed ? new Elements(parsed) : null);
-    }
+  if (doc instanceof Elements) {
+    return doc;
+  }
+  if (doc instanceof Element) {
+    return new Elements(doc);
+  }
+  if (typeof doc === 'string') {
+    const parsed = parseSafely(
+      () => Jsoup.parse(doc),
+      'HTML 解析失败 (ensureElements):',
+      { doc }
+    );
+    return parsed instanceof Elements ? parsed : (parsed ? new Elements(parsed) : null);
+  }
 
-    logger.warn('ensureElements: Input is null, undefined, or cannot be converted to a string or Elements.');
-    return null;
+  logger.warn('ensureElements: Input is null, undefined, or cannot be converted to a string or Elements.');
+  return null;
 }
 
 /**

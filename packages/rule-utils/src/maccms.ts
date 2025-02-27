@@ -2,7 +2,8 @@ import { XMLParser } from 'fast-xml-parser';
 import type { Rule } from './type';
 import { createRule } from './rule';
 import { USER_AGENT } from './config';
-import { NetworkManager, logger } from '@any-reader/utils';
+import { NetworkManager } from '@any-reader/utils';
+import { handleError } from '@any-reader/legado';
 
 const XML = new XMLParser({
   trimValues: true,
@@ -122,8 +123,8 @@ async function cmsFetchAndParse(
     const jsonData = parser(response.data);
     return cmsToRule(jsonData, url);
   } catch (error: any) {
-    logger.error('网络请求失败:', { url, error: error.message, stack: error.stack });
-    throw new Error(`网络请求失败: ${error.message}`, { cause: error }); // 抛出更详细的错误
+    // 使用 handleError
+    return handleError('网络请求失败:', { url, error: error, fieldName: 'cmsFetch' }, createRule({}));
   }
 }
 

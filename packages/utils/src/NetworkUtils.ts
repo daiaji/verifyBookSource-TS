@@ -29,7 +29,7 @@ export class NetworkUtils {
             // 兼容传入 null 的情况
             return new URL(relativePathTrim, base || undefined).toString();
         } catch (e: any) {
-            logger.error("[NetworkUtils2] 网址拼接出错:", { baseURL, relativePath, error: e, stack: e.stack }); //添加 [NetworkUtils2]
+            logger.error("[NetworkUtils] 网址拼接出错:", { baseURL, relativePath, error: e, stack: e.stack }); //添加 [NetworkUtils]
             return relativePathTrim; // 出错时返回原始的相对路径
         }
     }

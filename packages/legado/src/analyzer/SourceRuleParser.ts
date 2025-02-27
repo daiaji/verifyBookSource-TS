@@ -6,9 +6,10 @@ import { JsonPathEvaluator } from './JsonPathEvaluator';
 import { RegexEvaluator } from './RegexEvaluator';
 import { RuleAnalyzer } from './RuleAnalyzer';
 import { RuleEvaluator } from './RuleEvaluator';
-import { parseJson } from './utils';
+import { parseJson, handleError } from './utils';
 import { XPathEvaluator } from './XPathEvaluator';
 import { logger } from '@any-reader/utils';
+import { AnalyzerManager } from './AnalyzerManager';  // 导入 AnalyzerManager
 
 export class SourceRuleParser {
   private sourceRule: string;
@@ -20,7 +21,37 @@ export class SourceRuleParser {
     this.getString = getString;
     this.mustache = mustache;
   }
+  private getRuleType(ruleStr: string, prefix: string | null): string {
+    if (this.mustache && !this.isRule(this.sourceRule)) {
+      return 'mustache';
+    }
+    if (!this.getString && !this.mustache && this.sourceRule.startsWith(':')) {
+      return "allInOne"
+    }
 
+    switch (prefix) {
+      case '<js>':
+      case '@js:':
+        return 'js';
+      case '@css:':
+      case '@@':
+        return 'default';
+      case '@xpath:':
+        return 'xpath';
+      case '@json:':
+        return 'jsonpath';
+    }
+
+    if (ruleStr.startsWith('$.') || ruleStr.startsWith('$[')) {
+      return 'jsonpath';
+    }
+
+    if (ruleStr.startsWith('/')) {
+      return 'xpath/jsonpath'
+    }
+
+    return 'default/jsonpath';
+  }
   parse(): RuleEvaluator {
     if (this.mustache && !this.isRule(this.sourceRule)) {
       return new JsEvaluator.Js(new JsEvaluator.ScriptLiteral(this.sourceRule), '');
@@ -46,63 +77,77 @@ export class SourceRuleParser {
       const originRule = rules[i];
       let rule = originRule;
       const evals: RuleEvaluator[] = [];
+      const ruleType = this.getRuleType(rule, this.parsePrefix(rule));
 
-      // 解析 put
-      const putMap: Map<string, RuleEvaluator> = new Map();
-      rule = this.parsePutRule(rule, putMap);
-      if (putMap.size > 0) {
-        evals.push(new RuleEvaluator.Put(putMap));
-      }
+      try { // 添加 try...catch 块
+        // 解析 put
+        const putMap: Map<string, RuleEvaluator> = new Map();
+        rule = this.parsePutRule(rule, putMap);
+        if (putMap.size > 0) {
+          evals.push(new RuleEvaluator.Put(putMap));
+        }
 
-      // 处理规则分隔部分
-      const prefix = this.parsePrefix(rule);
-      if (prefix === '<js>') {
-        rule = rule.substring(4, rule.length - 5);
-      } else if (prefix !== null) {
-        rule = rule.substring(prefix.length);
-      }
+        // 处理规则分隔部分
+        const prefix = this.parsePrefix(rule);
+        if (prefix === '<js>') {
+          rule = rule.substring(4, rule.length - 5);
+        } else if (prefix !== null) {
+          rule = rule.substring(prefix.length);
+        }
 
-      let regexEval: RuleEvaluator | null = null;
-      // 解析 插值 @get {{ }} $1
-      if (prefix !== '<js>' && prefix !== '@js:') {
-        const formatEval = this.parseFormat(rule);
-        if (formatEval != null) {
-          evals.push(formatEval[0]);
-          // 解析 正则
-          if (formatEval[1].includes('##')) {
-            const regexResult = this.parseRegexRule(formatEval[1]);
-            if (regexResult) {
-              evals.push(regexResult.evaluator);
+        let regexEval: RuleEvaluator | null = null;
+        // 解析 插值 @get {{ }} $1
+        if (prefix !== '<js>' && prefix !== '@js:') {
+          const formatEval = this.parseFormat(rule);
+          if (formatEval != null) {
+            evals.push(formatEval[0]);
+            // 解析 正则
+            if (formatEval[1].includes('##')) {
+              const regexResult = this.parseRegexRule(formatEval[1]);
+              if (regexResult) {
+                evals.push(regexResult.evaluator);
+              }
             }
+            rootEvals.push(this.sequenceIfNeed(evals));
+            continue;
           }
+        }
+
+        // 解析 正则
+        const regexResult = this.parseRegexRule(rule);
+        if (regexResult) {
+          rule = regexResult.rule;
+          regexEval = regexResult.evaluator;
+        }
+        if (!rule) {
+          if (regexEval) evals.push(regexEval);
           rootEvals.push(this.sequenceIfNeed(evals));
           continue;
         }
-      }
 
-      // 解析 正则
-      const regexResult = this.parseRegexRule(rule);
-      if (regexResult) {
-        rule = regexResult.rule;
-        regexEval = regexResult.evaluator;
-      }
-      if (!rule) {
+        // 解析规则
+        const _eval = this.parseRule(rule, prefix);
+        if (this.getString && !this.mustache && rootEvals.length === 0) {
+          // 第一条规则
+          const nativeObjectEvaluator = new RuleEvaluator.NativeObjectEvaluator(originRule);
+          evals.push(new RuleEvaluator.NativeObjectAdapter(_eval, nativeObjectEvaluator));
+        } else {
+          evals.push(_eval);
+        }
         if (regexEval) evals.push(regexEval);
         rootEvals.push(this.sequenceIfNeed(evals));
-        continue;
-      }
 
-      // 解析规则
-      const _eval = this.parseRule(rule, prefix);
-      if (this.getString && !this.mustache && rootEvals.length === 0) {
-        // 第一条规则
-        const nativeObjectEvaluator = new RuleEvaluator.NativeObjectEvaluator(originRule);
-        evals.push(new RuleEvaluator.NativeObjectAdapter(_eval, nativeObjectEvaluator));
-      } else {
-        evals.push(_eval);
+      } catch (e: any) {
+        logger.error(`解析规则失败: type=${ruleType}, rule=${originRule}`, {
+          error: e.message,
+          stack: e.stack,
+          fieldName: 'unknown', // 需要在调用时根据上下文确定
+          ruleContent: originRule,
+        });
+        // 可以选择抛出异常，或者返回一个默认的 RuleEvaluator
+        throw e; // 重新抛出异常，让上层处理
+        // return new (class extends RuleEvaluator { })(); // 或者返回一个空的 RuleEvaluator
       }
-      if (regexEval) evals.push(regexEval);
-      rootEvals.push(this.sequenceIfNeed(evals));
     }
 
     return this.sequenceIfNeed(rootEvals);
@@ -142,61 +187,119 @@ export class SourceRuleParser {
   }
 
   private parseJsonPathRule(ruleStr: string): RuleEvaluator {
-    const evals: RuleEvaluator[] = [];
+    try {
+      const evals: RuleEvaluator[] = [];
 
-    const ruleAnalyzes = new RuleAnalyzer(ruleStr, true);
-    const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
+      const ruleAnalyzes = new RuleAnalyzer(ruleStr, true);
+      const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
 
-    for (const rl of rules) {
-      const ruleAnalyzer = new RuleAnalyzer(rl, true);
-      const result = ruleAnalyzer.splitInnerRule('{$.');
+      for (const rl of rules) {
+        const ruleAnalyzer = new RuleAnalyzer(rl, true);
+        const result = ruleAnalyzer.splitInnerRule('{$.');
 
-      if (result.length === 0) {
-        evals.push(new JsonPathEvaluator(rl));
-      } else {
-        evals.push(this.parseJsonPathFormat(result));
+        if (result.length === 0) {
+          evals.push(new JsonPathEvaluator(rl));
+        } else {
+          evals.push(this.parseJsonPathFormat(result));
+        }
       }
+
+      const combineEvaluator = this.parseCombineOperate(ruleAnalyzes.elementsType, evals);
+
+      return new JsonPathEvaluator.ConvertWrapper(combineEvaluator);
+    } catch (e: any) {
+      logger.error(`解析 JsonPathRule 失败: ruleStr=${ruleStr}`, {
+        error: e.message,
+        stack: e.stack,
+        fieldName: 'parseJsonPathRule', // 根据实际情况修改
+        ruleContent: ruleStr,
+      });
+      return new (class extends RuleEvaluator {
+        override getElements(_context: AnalyzerManager, _value: any): any[] {
+          return [];
+        }
+      })(); // 返回空的 RuleEvaluator
+
     }
-
-    const combineEvaluator = this.parseCombineOperate(ruleAnalyzes.elementsType, evals);
-
-    return new JsonPathEvaluator.ConvertWrapper(combineEvaluator);
   }
 
   private parseJsonPathFormat(rules: string[]): RuleEvaluator {
-    const evals: RuleEvaluator[] = [];
-    for (const rule of rules) {
-      if (rule.startsWith('{$.')) {
-        const path = rule.substring(1, rule.length - 1);
-        evals.push(new FormatEvaluator.JsonPath(new JsonPathEvaluator(path)));
-      } else {
-        evals.push(new FormatEvaluator.Literal(rule));
+    try {
+      const evals: RuleEvaluator[] = [];
+      for (const rule of rules) {
+        if (rule.startsWith('{$.')) {
+          const path = rule.substring(1, rule.length - 1);
+          evals.push(new FormatEvaluator.JsonPath(new JsonPathEvaluator(path)));
+        } else {
+          evals.push(new FormatEvaluator.Literal(rule));
+        }
       }
+      return new FormatEvaluator(evals);
+    } catch (e: any) {
+      logger.error(`解析 JsonPathFormat 失败: rules=${rules}`, {
+        error: e.message,
+        stack: e.stack,
+        fieldName: 'parseJsonPathFormat', // 根据实际情况修改
+        ruleContent: rules.join(' '),
+      });
+      return new (class extends RuleEvaluator {
+        override getElements(_context: AnalyzerManager, _value: any): any[] {
+          return [];
+        }
+      })(); // 返回空的 RuleEvaluator
     }
-    return new FormatEvaluator(evals);
   }
 
   private parseXpathRule(ruleStr: string): RuleEvaluator {
-    const evals: RuleEvaluator[] = [];
+    try {
+      const evals: RuleEvaluator[] = [];
 
-    const ruleAnalyzes = new RuleAnalyzer(ruleStr);
-    const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
+      const ruleAnalyzes = new RuleAnalyzer(ruleStr);
+      const rules = ruleAnalyzes.splitRule('&&', '||', '%%');
 
-    for (const rl of rules) {
-      evals.push(new XPathEvaluator(rl));
+      for (const rl of rules) {
+        evals.push(new XPathEvaluator(rl));
+      }
+
+      const combineEvaluator = this.parseCombineOperate(ruleAnalyzes.elementsType, evals);
+
+      return new XPathEvaluator.ConvertWrapper(combineEvaluator);
+    } catch (e: any) {
+      logger.error(`解析 XpathRule 失败: ruleStr=${ruleStr}`, {
+        error: e.message,
+        stack: e.stack,
+        fieldName: 'parseXpathRule', // 根据实际情况修改
+        ruleContent: ruleStr,
+      });
+      return new (class extends RuleEvaluator {
+        override getElements(_context: AnalyzerManager, _value: any): any[] {
+          return [];
+        }
+      })(); // 返回空的 RuleEvaluator
     }
-
-    const combineEvaluator = this.parseCombineOperate(ruleAnalyzes.elementsType, evals);
-
-    return new XPathEvaluator.ConvertWrapper(combineEvaluator);
   }
 
   private parseJsRule(ruleStr: string, prefix: string): RuleEvaluator {
-    const formatResult = this.parseFormat(ruleStr, false);
+    try {
+      const formatResult = this.parseFormat(ruleStr, false);
 
-    const script = formatResult ? new JsEvaluator.ScriptEval(formatResult[0]) : new JsEvaluator.ScriptLiteral(ruleStr);
+      const script = formatResult ? new JsEvaluator.ScriptEval(formatResult[0]) : new JsEvaluator.ScriptLiteral(ruleStr);
 
-    return new JsEvaluator.Js(script, prefix);
+      return new JsEvaluator.Js(script, prefix);
+    } catch (e: any) {
+      logger.error(`解析 JsRule 失败: ruleStr=${ruleStr}, prefix=${prefix}`, {
+        error: e.message,
+        stack: e.stack,
+        fieldName: 'parseJsRule', // 根据实际情况修改
+        ruleContent: ruleStr,
+      });
+      return new (class extends RuleEvaluator {
+        override getElements(_context: AnalyzerManager, _value: any): any[] {
+          return [];
+        }
+      })(); // 返回空的 RuleEvaluator
+
+    }
   }
 
   private parseDefaultRule(ruleStr: string, prefix: string): RuleEvaluator {
@@ -207,14 +310,25 @@ export class SourceRuleParser {
 
     if (prefix === '@css:') {
       for (const [index, ruleStrX] of ruleStrS.entries()) {
-        if (this.getString) {
-          const lastIndex = ruleStrX.lastIndexOf('@');
-          const query = ruleStrX.substring(0, lastIndex);
-          const cssEvaluator = new Select.Css(query, index === 0);
-          const endEvaluator = this.parseDefaultEnd(ruleStrX.substring(lastIndex + 1));
-          evals.push(new DefaultEvaluator([cssEvaluator, endEvaluator]));
-        } else {
-          evals.push(new Select.Css(ruleStrX, index === 0));
+        try { //添加try
+          if (this.getString) {
+            const lastIndex = ruleStrX.lastIndexOf('@');
+            const query = ruleStrX.substring(0, lastIndex);
+            const cssEvaluator = new Select.Css(query, index === 0);
+            const endEvaluator = this.parseDefaultEnd(ruleStrX.substring(lastIndex + 1));
+            evals.push(new DefaultEvaluator([cssEvaluator, endEvaluator]));
+          } else {
+            evals.push(new Select.Css(ruleStrX, index === 0));
+          }
+        } catch (e: any) {
+          logger.error(`解析 DefaultRule (@css:) 失败: ruleStrX=${ruleStrX}, index=${index}`, {
+            error: e.message,
+            stack: e.stack,
+            fieldName: 'parseDefaultRule', // 根据实际情况修改
+            ruleContent: ruleStrX,
+          });
+          // 对于列表中的规则，可以考虑跳过当前规则，继续处理下一个
+          continue;
         }
       }
       const combineEvaluator = this.parseCombineOperate(ruleAnalyzes.elementsType, evals);
@@ -232,13 +346,40 @@ export class SourceRuleParser {
       const last = this.getString ? rules.length - 1 : rules.length;
 
       for (let i = 0; i < last; i++) {
-        const { rule: ruleNoIndex, index } = this.parseIndexSet(rules[i]);
-        logger.debug(`parseIndexSet result: ruleNoIndex=${ruleNoIndex}, index=${index}`); // 打印解析结果
-        subEvals.push(this.parseDefaultSelect(ruleNoIndex, index));
+        try { // 添加 try...catch
+          // 直接传入 rules[i]，不再调用 parseIndexSet
+          const { rule: ruleNoIndex, index } = this.parseIndexSet(rules[i]);  //只在这里调用
+          logger.debug(`parseIndexSet result: ruleNoIndex=${ruleNoIndex}, index=${index}`);
+          subEvals.push(this.parseDefaultSelect(ruleNoIndex, index)); // 直接传入 rules[i] 和 null
+        } catch (e: any) {
+          logger.error(`解析 DefaultRule (非 @css:) 失败: rule=${rules[i]}`, {
+            error: e.message,
+            stack: e.stack,
+            fieldName: 'parseDefaultRule',  // 根据实际情况修改
+            ruleContent: rules[i],
+          });
+          // 对于列表中的规则，可以考虑跳过当前规则，继续处理下一个
+          continue;
+        }
       }
 
       if (this.getString) {
-        subEvals.push(this.parseDefaultEnd(rules[rules.length - 1]));
+        try { //添加 try
+          subEvals.push(this.parseDefaultEnd(rules[rules.length - 1]));
+        } catch (e: any) {
+          logger.error(`解析 DefaultRule (非 @css:) 失败: rule=${rules[rules.length - 1]}`, {
+            error: e.message,
+            stack: e.stack,
+            fieldName: 'parseDefaultRule',  // 根据实际情况修改
+            ruleContent: rules[rules.length - 1],
+          });
+          // 最后一个规则解析失败, 应该直接返回
+          return new (class extends RuleEvaluator {
+            override getElements(_context: AnalyzerManager, _value: any): any[] {
+              return [];
+            }
+          })();
+        }
       }
 
       evals.push(new DefaultEvaluator(subEvals));
@@ -260,180 +401,203 @@ export class SourceRuleParser {
       case '%%':
         return new CombineEvaluator.Transpose(evals);
       default:
+        logger.warn(`未知的组合运算符: op=${op}, 使用第一个规则`, {
+          fieldName: 'parseCombineOperate', // 或其他更具体的字段
+          ruleContent: op,
+        });
         return evals[0];
     }
   }
 
   private parseDefaultSelect(ruleStr: string, index: RuleEvaluator | null): RuleEvaluator {
-    let finalRule = ruleStr; // 初始化最终规则为原始规则
+    let finalRule = ruleStr;
     if (!ruleStr) {
       return new DefaultEvaluator.Children(false, index);
     } else {
       const rules = ruleStr.split('.');
       let evaluator: RuleEvaluator;
-      switch (rules[0]) {
-        case 'children':
-          evaluator = new DefaultEvaluator.Children(true, index);
-          break;
-        case 'class':
-          // 修改这里，将多个 class 分开
-          const classNames = rules.slice(1).join('.');
-          finalRule = `.${classNames.replace(/\s+/g, '.')}`; // 构建最终的 CSS 选择器
-          evaluator = new Select.Css(finalRule, false, index);
-          break;
-        case 'tag':
-          finalRule = rules[1];  // tag 不需要前缀
-          evaluator = new Select.Tag(finalRule, index);
-          break;
-        case 'id':
-          finalRule = `#${rules[1]}`; // id 需要 # 前缀
-          evaluator = new Select.Id(finalRule, index);
-          break;
-        case 'text':
-          finalRule = `:contains(${rules[1]})`; // text 使用 :contains()
-          evaluator = new Select.Text(rules[1], index);
-          break;
-        default:
-          finalRule = ruleStr;   // 其他情况, 默认就是 css
-          evaluator = new Select.Css(finalRule, false, index);
+      try { // 对整个 switch 语句块进行 try...catch
+        switch (rules[0]) {
+          case 'children':
+            evaluator = new DefaultEvaluator.Children(true, index);
+            break;
+          case 'class':
+            const classNames = rules.slice(1).join('.');
+            finalRule = `.${classNames.replace(/\s+/g, '.')}`;
+            evaluator = new Select.Css(finalRule, false, index);
+            break;
+          case 'tag':
+            finalRule = rules[1];
+            evaluator = new Select.Tag(finalRule, index);
+            break;
+          case 'id':
+            finalRule = rules[1];
+            evaluator = new Select.Id(finalRule, index);
+            break;
+          case 'text':
+            finalRule = `:contains(${rules[1]})`;
+            evaluator = new Select.Text(rules[1], index);
+            break;
+          default:
+            finalRule = ruleStr;
+            evaluator = new Select.Css(finalRule, false, index);
+        }
+      } catch (e: any) {
+        logger.error(`解析 DefaultSelect 规则失败: ruleStr=${ruleStr}, index=${index}`, {
+          error: e.message,
+          stack: e.stack,
+          fieldName: 'parseDefaultSelect', // 可以根据需要更具体
+          ruleContent: ruleStr,
+        });
+        // 返回一个空的 RuleEvaluator
+        return new (class extends RuleEvaluator {
+          override getElements(_context: AnalyzerManager, _value: any): any[] {
+            return []; // 返回空数组
+          }
+        })();
       }
-      logger.debug(`parseDefaultSelect: finalRule=${finalRule}, index=${index}`);  // 输出最终规则
+
+      if (index) {
+        logger.debug(`parseDefaultSelect: finalRule=${finalRule}, index=${index}`);
+      } else {
+        logger.debug(`parseDefaultSelect: finalRule=${finalRule}`);
+      }
       return evaluator;
     }
   }
 
-    private parseDefaultEnd(end: string): RuleEvaluator {
-        logger.debug(`parseDefaultEnd: 传入的 end 参数为: ${end}`);
-        let evaluator: RuleEvaluator;
-        switch (end) {
-            case 'text':
-                evaluator = Last.Text;
-                break;
-            case 'textNodes':
-                evaluator = Last.TextNodes;
-                break;
-            case 'ownText':
-                evaluator = Last.OwnText;
-                break;
-            case 'html':
-                evaluator = Last.Html;
-                break;
-            case 'all':
-                evaluator = Last.All;
-                break;
-            default:
-                evaluator = new Last.Attr(end);
-        }
-        logger.debug(`parseDefaultEnd: 返回的 evaluator 类型为: ${evaluator.constructor.name}`);
-        return evaluator;
+  private parseDefaultEnd(end: string): RuleEvaluator {
+    logger.debug(`parseDefaultEnd: 传入的 end 参数为: ${end}`);
+    let evaluator: RuleEvaluator;
+    switch (end) {
+      case 'text':
+        evaluator = Last.Text;
+        break;
+      case 'textNodes':
+        evaluator = Last.TextNodes;
+        break;
+      case 'ownText':
+        evaluator = Last.OwnText;
+        break;
+      case 'html':
+        evaluator = Last.Html;
+        break;
+      case 'all':
+        evaluator = Last.All;
+        break;
+      default:
+        evaluator = new Last.Attr(end);
     }
+    logger.debug(`parseDefaultEnd: 返回的 evaluator 类型为: ${evaluator.constructor.name}`);
+    return evaluator;
+  }
 
-    private parseIndexSet(rule: string): { rule: string; index: RuleEvaluator | null } {
-        logger.debug(`parseIndexSet: 传入的 rule 参数为: ${rule}`);
-        const indexDefault: number[] = [];
-        const indexes: any[] = [];
-        let split = '.';
-        let beforeRule: string;
+  private parseIndexSet(rule: string): { rule: string; index: RuleEvaluator | null } {
+    logger.debug(`parseIndexSet: 传入的 rule 参数为: ${rule}`);
+    const indexDefault: number[] = [];
+    const indexes: any[] = [];
+    let split = '.';
+    let beforeRule: string;
 
-        const rus = rule.trim();
-        let len = rus.length;
-        let curInt: number | null; // 当前数字
-        let curMinus = false; // 当前数字是否为负
-        const curList: (number | null)[] = []; // 当前数字区间
-        let l = ''; // 暂存数字字符串
+    const rus = rule.trim();
+    let len = rus.length;
+    let curInt: number | null; // 当前数字
+    let curMinus = false; // 当前数字是否为负
+    const curList: (number | null)[] = []; // 当前数字区间
+    let l = ''; // 暂存数字字符串
 
-        const head = rus[rus.length - 1] === ']'; // 是否为常规索引写法
+    const head = rus[rus.length - 1] === ']'; // 是否为常规索引写法
 
-        if (head) {
-            // 常规索引写法[index...]
-            len--; // 跳过尾部']'
+    if (head) {
+      // 常规索引写法[index...]
+      len--; // 跳过尾部']'
 
-            while (len-- >= 0) {
-                // 逆向遍历, 可以无前置规则
-                const rl = rus[len];
-                logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
-                if (rl === ' ') continue; // 跳过空格
+      while (len-- >= 0) {
+        // 逆向遍历, 可以无前置规则
+        const rl = rus[len];
+        logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
+        if (rl === ' ') continue; // 跳过空格
 
-                if (rl >= '0' && rl <= '9') {
-                    l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
-                } else if (rl === '-') {
-                    curMinus = true;
-                } else {
-                    curInt = l.length === 0 ? null : curMinus ? -parseInt(l) : parseInt(l); // 当前数字
-
-                    switch (rl) {
-                        case ':':
-                            curList.push(curInt); // 区间右端或区间间隔
-                            break;
-
-                        default:
-                            // 为保证查找顺序，区间和单个索引都添加到同一集合
-                            if (curList.length === 0) {
-                                if (curInt === null) break; // 是jsoup选择器而非索引列表，跳出
-                                indexes.push(curInt);
-                            } else {
-                                // 列表最后压入的是区间右端，若列表有两位则最先压入的是间隔
-                                indexes.push([curInt, curList[curList.length - 1], curList.length === 2 ? curList[0] : 1]);
-
-                                curList.length = 0; // 重置临时列表，避免影响到下个区间的处理
-                            }
-
-                            if (rl === '!') {
-                                split = '!';
-                                do {
-                                    len--;
-                                } while (len > 0 && rus[len] === ' '); // 跳过所有空格
-                            }
-
-                            if (rl === '[') {
-                                beforeRule = rus.substring(0, len); // 遇到索引边界，返回结果
-                                const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
-                                logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
-                                return result;
-                            }
-
-                            if (rl !== ',') break; // 非索引结构，跳出
-                    }
-                    l = ''; // 清空
-                    curMinus = false; // 重置
-                }
-            }
+        if (rl >= '0' && rl <= '9') {
+          l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
+        } else if (rl === '-') {
+          curMinus = true;
         } else {
-            while (len-- >= 0) {
-                // 阅读原本写法，逆向遍历，可以无前置规则
-                const rl = rus[len];
-                logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
-                if (rl === ' ') continue; // 跳过空格
+          curInt = l.length === 0 ? null : curMinus ? -parseInt(l) : parseInt(l); // 当前数字
 
-                if (rl >= '0' && rl <= '9') {
-                    l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
-                } else if (rl === '-') {
-                    curMinus = true;
-                } else {
-                    if (rl === '!' || rl === '.' || rl === ':') {
-                        // 分隔符或起始符
-                        indexDefault.push(curMinus ? -parseInt(l) : parseInt(l)); // 当前数字追加到列表
+          switch (rl) {
+            case ':':
+              curList.push(curInt); // 区间右端或区间间隔
+              break;
 
-                        if (rl !== ':') {
-                            // rl === '!'  || rl === '.'
-                            split = rl;
-                            beforeRule = rus.substring(0, len);
-                            const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
-                            logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
-                            return result;
-                        }
-                    } else break; // 非索引结构，跳出循环
+            default:
+              // 为保证查找顺序，区间和单个索引都添加到同一集合
+              if (curList.length === 0) {
+                if (curInt === null) break; // 是jsoup选择器而非索引列表，跳出
+                indexes.push(curInt);
+              } else {
+                // 列表最后压入的是区间右端，若列表有两位则最先压入的是间隔
+                indexes.push([curInt, curList[curList.length - 1], curList.length === 2 ? curList[0] : 1]);
 
-                    l = ''; // 清空
-                    curMinus = false; // 重置
-                }
-            }
+                curList.length = 0; // 重置临时列表，避免影响到下个区间的处理
+              }
+
+              if (rl === '!') {
+                split = '!';
+                do {
+                  len--;
+                } while (len > 0 && rus[len] === ' '); // 跳过所有空格
+              }
+
+              if (rl === '[') {
+                beforeRule = rus.substring(0, len); // 遇到索引边界，返回结果
+                const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
+                logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
+                return result;
+              }
+
+              if (rl !== ',') break; // 非索引结构，跳出
+          }
+          l = ''; // 清空
+          curMinus = false; // 重置
         }
+      }
+    } else {
+      while (len-- >= 0) {
+        // 阅读原本写法，逆向遍历，可以无前置规则
+        const rl = rus[len];
+        logger.debug(`parseIndexSet: 当前循环字符 rl=${rl}, l=${l}`);
+        if (rl === ' ') continue; // 跳过空格
 
-        beforeRule = rus;
-        logger.debug(`parseIndexSet: 返回结果为: rule=${beforeRule}, index=null`);
-        return { rule: beforeRule, index: null };
+        if (rl >= '0' && rl <= '9') {
+          l = rl + l; // 将数值累接入临时字串中，遇到分界符才取出
+        } else if (rl === '-') {
+          curMinus = true;
+        } else {
+          if (rl === '!' || rl === '.' || rl === ':') {
+            // 分隔符或起始符
+            indexDefault.push(curMinus ? -parseInt(l) : parseInt(l)); // 当前数字追加到列表
+
+            if (rl !== ':') {
+              // rl === '!'  || rl === '.'
+              split = rl;
+              beforeRule = rus.substring(0, len);
+              const result = { rule: beforeRule, index: new DefaultEvaluator.Index(split === '!', indexDefault, indexes) };
+              logger.debug(`parseIndexSet: 返回结果为: rule=${result.rule}, index=${result.index}`);
+              return result;
+            }
+          } else break; // 非索引结构，跳出循环
+
+          l = ''; // 清空
+          curMinus = false; // 重置
+        }
+      }
     }
+
+    beforeRule = rus;
+    logger.debug(`parseIndexSet: 返回结果为: rule=${beforeRule}, index=null`);
+    return { rule: beforeRule, index: null };
+  }
 
   private parsePrefix(ruleStr: string): string | null {
     if (ruleStr.startsWith('<js>')) return '<js>';
@@ -445,40 +609,40 @@ export class SourceRuleParser {
     return null;
   }
 
-    private parseRegexRule(ruleStr: string): { rule: string; evaluator: RuleEvaluator } | null {
-        logger.debug(`parseRegexRule: 传入的 ruleStr 参数为: ${ruleStr}`);
-        const ruleStrS = ruleStr.split('##');
-        if (ruleStrS.length === 1) return null;
+  private parseRegexRule(ruleStr: string): { rule: string; evaluator: RuleEvaluator } | null {
+    logger.debug(`parseRegexRule: 传入的 ruleStr 参数为: ${ruleStr}`);
+    const ruleStrS = ruleStr.split('##');
+    if (ruleStrS.length === 1) return null;
 
-        let replaceRegex: string | null = null;
-        let replacement = '';
-        let replaceFirst = false;
+    let replaceRegex: string | null = null;
+    let replacement = '';
+    let replaceFirst = false;
 
-        if (ruleStrS.length > 1) {
-            replaceRegex = ruleStrS[1];
-        }
-        if (ruleStrS.length > 2) {
-            replacement = ruleStrS[2];
-        }
-        if (ruleStrS.length > 3) {
-            replaceFirst = true;
-        }
-        logger.debug(`parseRegexRule: 解析得到 replaceRegex=${replaceRegex}, replacement=${replacement}, replaceFirst=${replaceFirst}`);
-
-        let formatResult = this.parseFormat(replaceRegex!, false, false);
-
-        const regexEval = formatResult ? new RegexEvaluator.RegexEval(formatResult[0]) : new RegexEvaluator.RegexLiteral(replaceRegex!);
-
-        formatResult = this.parseFormat(replacement, false, false);
-
-        const replacementEval = formatResult ? new RegexEvaluator.ReplacementEval(formatResult[0]) : new RegexEvaluator.ReplacementLiteral(replacement);
-
-        const _eval = replaceFirst ? new RegexEvaluator.ReplaceFirst(regexEval, replacementEval) : new RegexEvaluator.Replace(regexEval, replacementEval);
-
-        const result = { rule: ruleStrS[0].trim(), evaluator: _eval };
-        logger.debug(`parseRegexRule: 返回结果为: rule=${result.rule}, evaluator=${result.evaluator}`);
-        return result;
+    if (ruleStrS.length > 1) {
+      replaceRegex = ruleStrS[1];
     }
+    if (ruleStrS.length > 2) {
+      replacement = ruleStrS[2];
+    }
+    if (ruleStrS.length > 3) {
+      replaceFirst = true;
+    }
+    logger.debug(`parseRegexRule: 解析得到 replaceRegex=${replaceRegex}, replacement=${replacement}, replaceFirst=${replaceFirst}`);
+
+    let formatResult = this.parseFormat(replaceRegex!, false, false);
+
+    const regexEval = formatResult ? new RegexEvaluator.RegexEval(formatResult[0]) : new RegexEvaluator.RegexLiteral(replaceRegex!);
+
+    formatResult = this.parseFormat(replacement, false, false);
+
+    const replacementEval = formatResult ? new RegexEvaluator.ReplacementEval(formatResult[0]) : new RegexEvaluator.ReplacementLiteral(replacement);
+
+    const _eval = replaceFirst ? new RegexEvaluator.ReplaceFirst(regexEval, replacementEval) : new RegexEvaluator.Replace(regexEval, replacementEval);
+
+    const result = { rule: ruleStrS[0].trim(), evaluator: _eval };
+    logger.debug(`parseRegexRule: 返回结果为: rule=${result.rule}, evaluator=${result.evaluator}`);
+    return result;
+  }
 
   private parseFormat(ruleStr: string, dollarSign: boolean = true, excludeRegex: boolean = true): [RuleEvaluator, string] | null {
     logger.debug(`parseFormat: 传入的参数为 ruleStr=${ruleStr}, dollarSign=${dollarSign}, excludeRegex=${excludeRegex}`);
@@ -599,7 +763,7 @@ export class SourceRuleParser {
           putMap.set(key, SourceRuleParser.parseStrings(value));
         }
       }
-        logger.debug(`parsePutRule: 当前 putMap=${JSON.stringify(Array.from(putMap.entries()))}`);
+      logger.debug(`parsePutRule: 当前 putMap=${JSON.stringify(Array.from(putMap.entries()))}`);
       match = regex.exec(vRuleStr);
     }
     logger.debug(`parsePutRule: 返回结果为: ${vRuleStr}`);

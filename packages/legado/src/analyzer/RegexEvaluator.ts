@@ -63,8 +63,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         }
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        handleError('正则表达式替换失败:', { regex: regex?.toString(), replacement, content: vResult, error: e, stack: e.stack }, vResult);
-        return vResult; // 发生错误时，返回原始字符串
+        return handleError('正则表达式替换失败:', { regex: regex?.toString(), replacement, content: vResult, error: e }, vResult); // 传入 error
+
       }
     }
 
@@ -85,8 +85,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         }
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        handleError('正则表达式替换列表失败:', { regex: regex?.toString(), replacement, content: resultList, error: e, stack: e.stack }, resultList.map(String));
-        return resultList.map(String); // 发生错误时，返回原始字符串数组
+        return handleError('正则表达式替换列表失败:', { regex: regex?.toString(), replacement, content: resultList, error: e }, resultList.map(String)); //传入 error
+
       }
     }
 
@@ -129,8 +129,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         }
         return match[0].replace(regex, replacement);
       } catch (e: any) {
-        handleError('正则表达式首次替换失败:', { regex: regex.toString(), replacement, content, error: e, stack: e.stack }, String(content));
-        return String(content);
+        return handleError('正则表达式首次替换失败:', { regex: regex.toString(), replacement, content, error: e }, String(content)); //传入 error
+
       }
     }
 
@@ -153,8 +153,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         });
       } catch (e: any) {
         // 捕获正则表达式相关的异常
-        handleError('正则表达式首次替换列表失败: ', { regex: regex?.toString(), replacement, content: resultList, error: e, stack: e.stack }, resultList.map(String));
-        return resultList.map(String); // 发生错误时，返回原始字符串数组
+        return handleError('正则表达式首次替换列表失败: ', { regex: regex?.toString(), replacement, content: resultList, error: e }, resultList.map(String)); //传入 error
+
       }
     }
 
@@ -189,8 +189,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       try {
         return new RegExp(str);
       } catch (e: any) {
-        handleError('编译正则表达式失败:', { regex: str, error: e, stack: e.stack }, null);
-        return null; // 编译失败时返回 null
+        return handleError('编译正则表达式失败:', { regex: str, error: e }, null); // 传入 error
+
       }
     }
 
@@ -220,8 +220,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       try {
         return new RegExp(regex);
       } catch (e: any) {
-        handleError('编译正则表达式失败:', { regex, error: e, stack: e.stack }, regex);
-        return regex; // 编译失败时返回原始字符串
+        return handleError('编译正则表达式失败:', { regex, error: e }, regex); //传入 error
+
       }
     }
 
@@ -284,14 +284,14 @@ export abstract class RegexEvaluator extends RuleEvaluator {
       try {
         return regexStrList.map(str => {
           if (str.length > RegexEvaluator.AllInOne.MAX_PATTERN_LENGTH) {
-            handleError('正则表达式过长，可能存在 ReDoS 风险:', { regex: str }, null);
-            return /./; // 返回一个无害的正则表达式
+            return handleError('正则表达式过长，可能存在 ReDoS 风险:', { regex: str, error: new Error("正则表达式过长") }, /./); //传入 error
+
           }
           return new RegExp(str);
         });
       } catch (e: any) {
-        handleError('编译正则表达式失败:', { regexStrList, error: e, stack: e.stack }, []);
-        return []; // 编译失败时设置为空数组
+        return handleError('编译正则表达式失败:', { regexStrList, error: e }, []); //传入 error
+
       }
     }
     /**
@@ -305,8 +305,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
         const matcher = content.match(pattern);
         return matcher;
       } catch (e: any) {
-        handleError('正则表达式匹配失败: ', { pattern: pattern.toString(), content: content, error: e, stack: e.stack }, null);
-        return null; // 匹配失败时返回 null
+        return handleError('正则表达式匹配失败: ', { pattern: pattern.toString(), content: content, error: e }, null); //传入 error
+
       }
     }
     /**
@@ -320,8 +320,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
 
       for (let i = 0; i < this.patterns.length - 1; i++) {
         if (result.length > RegexEvaluator.AllInOne.MAX_INPUT_LENGTH) {
-          handleError('输入字符串过长，可能存在 ReDoS 风险:', { content }, null);
-          return null;
+          return handleError('输入字符串过长，可能存在 ReDoS 风险:', { content, error: new Error("输入字符串过长") }, null); //传入 error
+
         }
         const matcher = this.matchAndExtract(result, this.patterns[i]);
         if (!matcher) return null;
@@ -344,8 +344,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
 
       for (let i = 0; i < this.patterns.length - 1; i++) {
         if (result.length > RegexEvaluator.AllInOne.MAX_INPUT_LENGTH) {
-          handleError('输入字符串过长，可能存在 ReDoS 风险: ', { content }, []);
-          return [];
+          return handleError('输入字符串过长，可能存在 ReDoS 风险: ', { content, error: new Error("输入字符串过长") }, []); //传入 error
+
         }
         const matcher = this.matchAndExtract(result, this.patterns[i]);
         if (!matcher) return [];
@@ -363,8 +363,8 @@ export abstract class RegexEvaluator extends RuleEvaluator {
           matches.push([...match]);
         }
       } catch (e: any) {
-        handleError('正则表达式匹配失败: ', { pattern: lastPattern.toString(), content: result, error: e, stack: e.stack }, []);
-        return []; // 匹配失败时返回空数组
+        return handleError('正则表达式匹配失败: ', { pattern: lastPattern.toString(), content: result, error: e }, []); //传入 error, 匹配失败时返回空数组
+
       }
       return matches;
     }

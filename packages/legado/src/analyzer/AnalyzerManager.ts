@@ -55,57 +55,57 @@ export class AnalyzerManager {
    * @param isUrl 是否为 URL（如果是，则进行 URL 拼接）
    * @returns 字符串列表或 null
    */
-    public getStringList(
-        rule: string | RuleEvaluator | null,
-        fieldName: string | null = null,
-        content: any | null = null,
-        isUrl: boolean = false
-    ): string[] | null {
-        if (!rule) {
-            logger.warn(`接收到空规则, 字段: ${fieldName}`);
-            return null;
-        }
-
-        let evaluator: RuleEvaluator | null = null;
-        if (typeof rule === 'string') {
-            if (!rule.trim()) {
-                logger.warn(`接收到空规则字符串, 字段: ${fieldName}`);
-                return null;
-            }
-            logger.silly(`解析规则, 字段: ${fieldName}, 规则: ${rule}`);
-            try {
-                evaluator = SourceRuleParser.parseStrings(rule);
-            } catch (e: any) {
-                logger.error(`解析规则字符串失败, 字段: ${fieldName}, 规则: ${rule}`, { error: e.message, stack: e.stack });
-                return null; // 解析失败，返回 null
-            }
-        } else {
-            evaluator = rule;
-        }
-
-        const targetContent = content ?? this.content;
-        if (!targetContent) {
-            logger.silly(`内容为空, 字段: ${fieldName}, 返回 null`);
-            return null;
-        }
-
-        const result = evaluator.getStrings(this, targetContent);
-        if (isUrl && Array.isArray(result)) {
-            const urlList: string[] = [];
-            for (const url of result) {
-                const absoluteURL = NetworkUtils.getAbsoluteURL(this.redirectUrl, String(url));
-                logger.silly(`原始 URL: ${url}, 绝对 URL: ${absoluteURL}`);
-                if (absoluteURL && !urlList.includes(absoluteURL)) {
-                    urlList.push(absoluteURL);
-                }
-            }
-            logger.silly(`返回结果, 字段: ${fieldName}, URL 数量: ${urlList.length}, 第一个 URL: ${urlList[0] ?? 'N/A'}`);
-            return urlList;
-        }
-
-        logger.silly(`返回结果, 字段: ${fieldName}, 结果数量: ${result ? result.length : 0}`);
-        return result;
+  public getStringList(
+    rule: string | RuleEvaluator | null,
+    fieldName: string | null = null,
+    content: any | null = null,
+    isUrl: boolean = false
+  ): string[] | null {
+    if (!rule) {
+      logger.warn(`接收到空规则, 字段: ${fieldName}`);
+      return null;
     }
+
+    let evaluator: RuleEvaluator | null = null;
+    if (typeof rule === 'string') {
+      if (!rule.trim()) {
+        logger.warn(`接收到空规则字符串, 字段: ${fieldName}`);
+        return null;
+      }
+      logger.silly(`解析规则, 字段: ${fieldName}, 规则: ${rule}`);
+      try {
+        evaluator = SourceRuleParser.parseStrings(rule);
+      } catch (e: any) {
+        logger.error(`解析规则字符串失败, 字段: ${fieldName}, 规则: ${rule}`, { error: e.message, stack: e.stack });
+        return null; // 解析失败，返回 null
+      }
+    } else {
+      evaluator = rule;
+    }
+
+    const targetContent = content ?? this.content;
+    if (!targetContent) {
+      logger.silly(`内容为空, 字段: ${fieldName}, 返回 null`);
+      return null;
+    }
+
+    const result = evaluator.getStrings(this, targetContent);
+    if (isUrl && Array.isArray(result)) {
+      const urlList: string[] = [];
+      for (const url of result) {
+        const absoluteURL = NetworkUtils.getAbsoluteURL(this.redirectUrl, String(url));
+        logger.silly(`原始 URL: ${url}, 绝对 URL: ${absoluteURL}`);
+        if (absoluteURL && !urlList.includes(absoluteURL)) {
+          urlList.push(absoluteURL);
+        }
+      }
+      logger.silly(`返回结果, 字段: ${fieldName}, URL 数量: ${urlList.length}, 第一个 URL: ${urlList[0] ?? 'N/A'}`);
+      return urlList;
+    }
+
+    logger.silly(`返回结果, 字段: ${fieldName}, 结果数量: ${result ? result.length : 0}`);
+    return result;
+  }
 
   /**
    * 获取单个字符串值。

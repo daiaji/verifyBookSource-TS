@@ -46,7 +46,7 @@ export async function text2rules(text: string): Promise<Rule[]> {
     }
     return result;
   } catch (error) {
-    logger.warn('导入格式不支持');
+    logger.warn('导入格式不支持', { fieldName: 'text2rules' }); // 补充 fieldName
     return [];
   }
 }
