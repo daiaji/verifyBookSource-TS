@@ -1,5 +1,5 @@
 import { isolate } from '../javascript/vm';
-import { parseJson } from './utils';
+import { parseJson, isJson, isXml } from './utils';
 import { RuleAnalyzer } from './RuleAnalyzer';
 import { NetworkUtils, NetworkManager, NetworkResponse } from '@any-reader/utils';
 import contentType from 'content-type';
@@ -297,7 +297,7 @@ export class AnalyzeUrl {
         this.urlNoQuery = this.url.substring(0, pos);
       }
     } else if (this.method === RequestMethod.POST && this.body && !this.headerMap['Content-Type']) {
-      if (!this.isJson(this.body) && !this.isXml(this.body)) {
+      if (!isJson(this.body) && !isXml(this.body)) {
         this.analyzeFields(this.body);
       }
     }
@@ -393,32 +393,6 @@ export class AnalyzeUrl {
       str = load(str, null, true).html();
     }
     return str
-  }
-
-  /**
-   * 检查字符串是否为 JSON 格式。
-   * @param {string | null} text 要检查的字符串
-   * @returns {boolean} 如果是 JSON 格式，则返回 true；否则返回 false
-   */
-  public isJson(text: string | null): boolean {
-    if (!text) {
-      return false;
-    }
-    const str = text.trim();
-    return (str.startsWith('{') && str.endsWith('}')) || (str.startsWith('[') && str.endsWith(']'));
-  }
-
-  /**
-   * 检查字符串是否为 XML 格式。
-   * @param {string | null} text 要检查的字符串
-   * @returns {boolean} 如果是 XML 格式，则返回 true；否则返回 false
-   */
-  public isXml(text: string | null): boolean {
-    if (!text) {
-      return false;
-    }
-    const str = text.trim();
-    return str.startsWith('<') && str.endsWith('>');
   }
 
   /**

@@ -2,6 +2,7 @@ import { AnalyzerManager } from './AnalyzerManager';
 import { BaseRuleEvaluator } from './BaseRuleEvaluator';
 import { isExplicitObject, joinNonEmpty, safeString, splitLines } from './utils';
 import { FormatEvaluator, JsEvaluator, RegexEvaluator } from './common';
+import { logger } from '@any-reader/utils';
 
 /**
  * 规则执行器。
@@ -218,9 +219,14 @@ export abstract class RuleEvaluator extends BaseRuleEvaluator {
       this._eval = _eval;
       this.nativeObjectEvaluator = nativeObjectEvaluator;
     }
-    // 使用统一的方法进行判断
+
+    // // 使用统一的方法进行判断
+    // private check(value: any): boolean {
+    //   return isExplicitObject(value);
+    // }
+
     private check(value: any): boolean {
-      return isExplicitObject(value);
+      return false; // 直接返回 false
     }
 
     override getString(context: AnalyzerManager, value?: any): string {

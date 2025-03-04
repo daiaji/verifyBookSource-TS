@@ -4,6 +4,46 @@ import { Element } from '../javascript/jsoup/Element';
 import { Jsoup } from '../javascript/jsoup/Jsoup';
 
 /**
+ * 安全地将任意值转换为字符串，处理 null 和 undefined。
+ * @param value 要转换的值
+ * @returns 字符串表示形式，如果值为 null 或 undefined，则返回空字符串
+ */
+export function safeString(value: any): string {
+  return value == null ? '' : (typeof value === 'string' ? value : String(value));
+}
+
+/**
+ * 检查字符串是否为 JSON 格式。
+ * @param {string | null} text 要检查的字符串
+ * @returns {boolean} 如果是 JSON 格式，则返回 true；否则返回 false
+ */
+export function isJson(text: string | null): boolean {
+  if (!text) {
+    return false;
+  }
+  const str = safeString(text).trim();  // 使用 safeString
+  try {
+    JSON.parse(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 检查字符串是否为 XML 格式。
+ * @param {string | null} text 要检查的字符串
+ * @returns {boolean} 如果是 XML 格式，则返回 true；否则返回 false
+ */
+export function isXml(text: string | null): boolean {
+  if (!text) {
+    return false;
+  }
+  const str = safeString(text).trim();
+  return str.startsWith('<') && str.endsWith('>');
+}
+
+/**
  * 检查值是否为显式对象 (即由 Object 构造函数创建的对象)。
  * @param value 要检查的值
  * @returns 如果值是显式对象，则返回 true；否则返回 false。
@@ -23,15 +63,6 @@ export function parseJson<T>(jsonString: string): T | null {
     'JSON 解析错误:',
     { jsonString }
   );
-}
-
-/**
- * 安全地将任意值转换为字符串，处理 null 和 undefined。
- * @param value 要转换的值
- * @returns 字符串表示形式，如果值为 null 或 undefined，则返回空字符串
- */
-export function safeString(value: any): string {
-  return value == null ? '' : String(value);
 }
 
 /**

@@ -2,6 +2,7 @@ import { NetworkUtils } from '@any-reader/utils';
 import { RuleEvaluator } from './RuleEvaluator';
 import { SourceRuleParser } from './SourceRuleParser';
 import { logger } from '@any-reader/utils'
+import { isJson } from './utils'
 
 /**
  * 分析器管理器类。
@@ -24,6 +25,10 @@ export class AnalyzerManager {
    */
   public setContent(content: any): void {
     this.content = content;
+    // 增加 JSON 判断逻辑
+    this.isJSON = isJson(content);
+
+    logger.info(`isJSON的状态是: ${this.isJSON}`);
   }
 
   /**
