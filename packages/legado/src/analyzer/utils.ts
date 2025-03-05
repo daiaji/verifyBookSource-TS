@@ -21,7 +21,7 @@ export function isJson(text: string | null): boolean {
   if (!text) {
     return false;
   }
-  const str = safeString(text).trim();  // 使用 safeString
+  const str = text.trim();  // 使用 safeString
   try {
     JSON.parse(str);
     return true;
